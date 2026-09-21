@@ -14,6 +14,7 @@ function App(){
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState<string|null>(null);
   const workoutBack=useRef<()=>void>(()=>{});
+  const syncQueue=useRef<Promise<unknown>>(Promise.resolve());
 
   useEffect(()=>{ initTelegram(); getAppData().then(setData).catch(e=>setError(String(e))).finally(()=>setLoading(false)); },[]);
   useEffect(()=>{
@@ -28,19 +29,34 @@ function App(){
     workoutBack.current=()=>setScreen(screen.kind==='workout'||screen.kind==='history'||screen.kind==='settings'||screen.kind==='calendar'||screen.kind==='summary'?{kind:'home'}:{kind:'home'});
   },[screen]);
 
-  const commit=async(next:AppData)=>{ setData(next); try{await saveRemoteData(next);}catch(e){setError(`Не удалось синхронизировать: ${String(e)}`);} };
+  const commit=(next:AppData)=>{
+    setData(next);
+    // Keep remote writes in the same order as local changes. A quick sequence
+    // of saved sets must never be reordered by slower network responses.
+    syncQueue.current=syncQueue.current
+      .catch(()=>undefined)
+      .then(()=>saveRemoteData(next))
+      .catch(e=>setError(`Не удалось синхронизировать: ${String(e)}`));
+    return syncQueue.current;
+  };
   if(loading) return <div className="app"><div className="card">Загрузка…</div></div>;
   if(!data) return <div className="app"><div className="card"><h2>Не удалось открыть журнал</h2><p className="muted">{error}</p></div></div>;
 
   let body:React.ReactNode;
   if(screen.kind==='home') body=<Home data={data} onStart={typeId=>{
     const existing=data.workouts.find(w=>w.typeId===typeId&&w.date===todayISO()&&w.status==='draft');
-    if(existing) setScreen({kind:'workout',typeId,workoutId:existing.id});
-    else { const w=startWorkout(data,typeId); commit({...data,workouts:[...data.workouts,w]}).then(()=>setScreen({kind:'workout',typeId,workoutId:w.id})); }
+    if(existing) {
+      const ensured=ensureWorkoutExercises(existing,data);
+      if(ensured!==existing) commit({...data,workouts:data.workouts.map(w=>w.id===existing.id?ensured:w)});
+      setScreen({kind:'workout',typeId,workoutId:existing.id});
+    } else {
+      const w=startWorkout(data,typeId);
+      commit({...data,workouts:[...data.workouts,w]}).then(()=>setScreen({kind:'workout',typeId,workoutId:w.id}));
+    }
   }} onNav={setScreen}/>;
   if(screen.kind==='workout') {
     const w0=data.workouts.find(w=>w.id===screen.workoutId);
-    body=w0?<WorkoutScreen data={data} workout={ensureWorkoutExercises(w0,data)} onChange={w=>commit({...data,workouts:data.workouts.map(x=>x.id===w.id?w:x)})} onFinish={w=>commit({...data,workouts:data.workouts.map(x=>x.id===w.id?{...x,status:'completed',completedAt:new Date().toISOString()}:x)})} onTimer={(seconds)=>setTimer({until:Date.now()+seconds*1000})} onHome={()=>setScreen({kind:'home'})}/>:<NotFound/>;
+    body=w0?<WorkoutScreen data={data} workout={w0} onChange={w=>commit({...data,workouts:data.workouts.map(x=>x.id===w.id?w:x)})} onFinish={w=>commit({...data,workouts:data.workouts.map(x=>x.id===w.id?{...x,status:'completed',completedAt:new Date().toISOString()}:x)})} onTimer={(seconds)=>setTimer({until:Date.now()+seconds*1000})} onHome={()=>setScreen({kind:'home'})}/>:<NotFound/>;
   }
   if(screen.kind==='calendar') body=<CalendarScreen data={data} onOpen={w=>setScreen({kind:'history',workoutId:w.id})}/>;
   if(screen.kind==='history') { const w=data.workouts.find(x=>x.id===screen.workoutId); body=w?<HistoryScreen data={data} workout={w}/>:<NotFound/>; }
