@@ -14,7 +14,7 @@ function App(){
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState<string|null>(null);
   const workoutBack=useRef<()=>void>(()=>{});
-  const syncQueue=useRef<Promise<unknown>>(Promise.resolve());
+  const syncQueue=useRef<Promise<void>>(Promise.resolve());
 
   useEffect(()=>{ initTelegram(); getAppData().then(setData).catch(e=>setError(String(e))).finally(()=>setLoading(false)); },[]);
   useEffect(()=>{
@@ -29,7 +29,7 @@ function App(){
     workoutBack.current=()=>setScreen(screen.kind==='workout'||screen.kind==='history'||screen.kind==='settings'||screen.kind==='calendar'||screen.kind==='summary'?{kind:'home'}:{kind:'home'});
   },[screen]);
 
-  const commit=(next:AppData)=>{
+  const commit=(next:AppData):Promise<void>=>{
     setData(next);
     // Keep remote writes in the same order as local changes. A quick sequence
     // of saved sets must never be reordered by slower network responses.
@@ -37,7 +37,7 @@ function App(){
       .catch(()=>undefined)
       .then(()=>saveRemoteData(next))
       .then(()=>undefined)
-      .catch(e=>setError(`Не удалось синхронизировать: ${String(e)}`));
+      .catch(e=>{ setError(`Не удалось синхронизировать: ${String(e)}`); });
     return syncQueue.current;
   };
   if(loading) return <div className="app"><div className="card">Загрузка…</div></div>;
