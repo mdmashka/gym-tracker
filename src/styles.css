@@ -90,7 +90,7 @@ h2 { font-size:22px; letter-spacing:-.02em; }
 
 .filter-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.filter-actions{display:flex;justify-content:flex-end;margin-top:10px}.filter-actions .secondary{min-width:100px}
 
-.settings-list{margin-top:8px;touch-action:pan-y}
+.settings-list{margin-top:8px;touch-action:none}
 .settings-item{min-height:54px;display:flex;align-items:center;gap:10px;padding:8px 2px;border-top:1px solid rgba(128,128,128,.1);user-select:none;transition:transform .16s ease,opacity .16s ease,background .16s ease;cursor:grab}
 .settings-item:first-child{border-top:0}
 .settings-item:active{cursor:grabbing}
@@ -100,3 +100,6 @@ h2 { font-size:22px; letter-spacing:-.02em; }
 .settings-delete{width:32px;height:32px;border-radius:50%;background:rgba(255,59,48,.1);color:#ff3b30;font-size:22px;font-weight:400;line-height:1;cursor:pointer}
 .settings-tip{margin-top:9px;color:var(--tg-hint-color,#8e8e93);font-size:12px;line-height:1.35}
 .settings-empty{padding:18px 2px;text-align:center;font-size:13px}
+
+.settings-item{touch-action:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.settings-item.is-dragging{position:relative;z-index:5}
