@@ -64,7 +64,7 @@ h2 { font-size:22px; letter-spacing:-.02em; }
 .cal-day.today { outline:2px solid var(--tg-link-color,#2481cc); }
 .cal-dot { position:absolute; width:5px; height:5px; border-radius:50%; bottom:6px; background:var(--tg-link-color,#2481cc); }
 .segmented { display:flex; background:rgba(128,128,128,.09); border-radius:12px; padding:3px; }
-.segmented button { flex:1; min-height:38px; background:transparent; color:var(--tg-hint-color,#8e8e93); border-radius:9px; cursor:pointer; }
+.segmented button { flex:1; min-height:38px; min-width:0; padding:0 7px; background:transparent; color:var(--tg-hint-color,#8e8e93); border-radius:9px; cursor:pointer; font-size:13px; line-height:1.15; white-space:nowrap; }
 .segmented button.active { background:var(--tg-secondary-bg-color,#fff); color:var(--tg-text-color,#111); font-weight:700; box-shadow:0 1px 3px rgba(0,0,0,.08); }
 .summary-group { display:flex; flex-direction:column; gap:9px; }
 .summary-row { display:flex; justify-content:space-between; gap:12px; padding:10px 0; border-top:1px solid rgba(128,128,128,.10); }
