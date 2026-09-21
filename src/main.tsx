@@ -221,9 +221,37 @@ function SettingsScreen({data,onChange}:{data:AppData;onChange:(d:AppData)=>Prom
    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
  };
 
- const moveDrag=(e:React.PointerEvent)=>{if(!dragId.current)return;e.preventDefault();const el=document.elementFromPoint(e.clientX,e.clientY)?.closest('.settings-item') as HTMLElement|null;const overId=el?.dataset.id;if(overId&&overId!==dragId.current)reorder(dragId.current,overId)};
- const endDrag=()=>{dragId.current=null;setDraggingId(null)};
- return <div className="screen"><Top title="Настройки" sub="Шаблоны тренировок"/><div className="card"><div className="segmented">{data.workoutTypes.map(t=><button key={t.id} className={target===t.id?'active':''} onClick={()=>setTarget(t.id)}>{t.name}</button>)}</div><div className="settings-list">{exercises.map(ex=><div className={'settings-item '+(draggingId===ex.id?'is-dragging':'')} data-id={ex.id} key={ex.id} onPointerDown={e=>startDrag(ex.id,e)} onPointerMove={moveDrag} onPointerUp={e=>{e.preventDefault();endDrag()}} onPointerCancel={endDrag}><span className="settings-drag-hint" aria-hidden="true">≡</span><span className="settings-name">{ex.name}</span><button className="settings-delete" aria-label={'Удалить '+ex.name+' из шаблона'} onPointerDown={e=>e.stopPropagation()} onClick={()=>remove(ex.id)}>−</button></div>)}{exercises.length===0&&<div className="muted settings-empty">В шаблоне пока нет упражнений</div>}</div><div className="settings-tip">Нажми и удерживай строку, затем перетащи её в нужное место.</div></div><div className="card"><div className="exercise-name">Добавить упражнение</div><div className="form-grid" style={{marginTop:10}}><input className="input" value={addName} onChange={e=>setAddName(e.target.value)} placeholder="Название упражнения"/><button className="primary" onClick={add}>Добавить в шаблон</button></div><div className="muted" style={{fontSize:12,marginTop:8}}>Разовое добавление во время тренировки остаётся доступно отдельно.</div></div></div>
+ const moveDrag=(e:PointerEvent|React.PointerEvent)=>{
+   if(!dragId.current)return;
+   e.preventDefault();
+   const el=document.elementFromPoint(e.clientX,e.clientY)?.closest('.settings-item') as HTMLElement|null;
+   const overId=el?.dataset.id;
+   if(overId&&overId!==dragId.current)reorder(dragId.current,overId);
+ };
+ const endDrag=()=>{
+   dragId.current=null;
+   setDraggingId(null);
+   document.body.style.overflow='';
+   document.body.style.touchAction='';
+ };
+ useEffect(()=>{
+   if(!draggingId)return;
+   const move=(e:PointerEvent)=>moveDrag(e);
+   const end=()=>endDrag();
+   document.addEventListener('pointermove',move,{passive:false});
+   document.addEventListener('pointerup',end,{passive:false});
+   document.addEventListener('pointercancel',end,{passive:false});
+   document.body.style.overflow='hidden';
+   document.body.style.touchAction='none';
+   return()=>{
+     document.removeEventListener('pointermove',move);
+     document.removeEventListener('pointerup',end);
+     document.removeEventListener('pointercancel',end);
+     document.body.style.overflow='';
+     document.body.style.touchAction='';
+   };
+ },[draggingId]);
+ return <div className="screen"><Top title="Настройки" sub="Шаблоны тренировок"/><div className="card"><div className="segmented">{data.workoutTypes.map(t=><button key={t.id} className={target===t.id?'active':''} onClick={()=>setTarget(t.id)}>{t.name}</button>)}</div><div className="settings-list">{exercises.map(ex=><div className={'settings-item '+(draggingId===ex.id?'is-dragging':'')} data-id={ex.id} key={ex.id} onPointerDown={e=>startDrag(ex.id,e)} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}><span className="settings-drag-hint" aria-hidden="true">≡</span><span className="settings-name">{ex.name}</span><button className="settings-delete" aria-label={'Удалить '+ex.name+' из шаблона'} onPointerDown={e=>e.stopPropagation()} onClick={()=>remove(ex.id)}>−</button></div>)}{exercises.length===0&&<div className="muted settings-empty">В шаблоне пока нет упражнений</div>}</div><div className="settings-tip">Нажми и удерживай строку, затем перетащи её в нужное место.</div></div><div className="card"><div className="exercise-name">Добавить упражнение</div><div className="form-grid" style={{marginTop:10}}><input className="input" value={addName} onChange={e=>setAddName(e.target.value)} placeholder="Название упражнения"/><button className="primary" onClick={add}>Добавить в шаблон</button></div><div className="muted" style={{fontSize:12,marginTop:8}}>Разовое добавление во время тренировки остаётся доступно отдельно.</div></div></div>
 }
 function WorkoutMetaEditor({data,workout,onClose,onSave}:{data:AppData;workout:Workout;onClose:()=>void;onSave:(w:Workout)=>void}){
  const [date,setDate]=useState(workout.date); const [name,setName]=useState(workout.name??''); const [type,setType]=useState(workout.typeId);
