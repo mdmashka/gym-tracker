@@ -1,4 +1,4 @@
-:root {
+ :root {\n  --app-accent: #ff375f;
   color-scheme: light dark;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif;
   background: var(--tg-bg-color, #f2f2f7);
@@ -18,19 +18,19 @@ h1 { font-size:28px; line-height:1.1; letter-spacing:-.035em; font-weight:700; }
 h2 { font-size:22px; letter-spacing:-.02em; }
 .screen { display:flex; flex-direction:column; gap:10px; }
 .card { background:var(--tg-secondary-bg-color,#fff); border-radius:17px; padding:14px; border:1px solid rgba(128,128,128,.13); box-shadow:0 1px 2px rgba(0,0,0,.03); }
-.choice-card { display:flex; align-items:center; justify-content:space-between; min-height:72px; cursor:pointer; transition:transform .12s ease, opacity .12s; }
+.choice-card { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:72px; cursor:pointer; transition:transform .12s ease, opacity .12s; text-align:left; }
 .choice-card:active { transform:scale(.985); }
-.choice-card .meta { display:flex; flex-direction:column; align-items:flex-start; width:100%; gap:5px; text-align:left; }
+.choice-card .meta { display:flex; flex-direction:column; align-items:flex-start; min-width:0; flex:1; gap:4px; text-align:left; }
 .choice-title { font-size:17px; line-height:1.2; font-weight:650; letter-spacing:-.015em; }
 .choice-sub { color:var(--tg-hint-color,#8e8e93); font-size:12px; line-height:1.25; }
-.chevron { color:var(--tg-hint-color,#8e8e93); font-size:28px; }
+.chevron { color:var(--tg-hint-color,#8e8e93); font-size:25px; font-weight:300; }\n.app-icon { width:42px; height:42px; flex:0 0 42px; display:inline-flex; align-items:center; justify-content:center; border-radius:13px; background:rgba(255,55,95,.11); color:var(--app-accent); }\n.app-icon svg { width:22px; height:22px; }\n.app-icon-legs { background:rgba(255,149,0,.13); color:#ff9500; }\n.app-icon-arms { background:rgba(52,199,89,.13); color:#34c759; }\n.app-icon-back { background:rgba(175,82,222,.13); color:#af52de; }\n.tool .app-icon { width:34px; height:34px; flex-basis:34px; border-radius:10px; }\n.tool .app-icon svg { width:18px; height:18px; }\n.home-section-label { margin:7px 3px 0; color:var(--tg-hint-color,#8e8e93); font-size:11px; font-weight:700; letter-spacing:.06em; }\n.sync-status { font-size:12px; text-align:center; }
 .tool-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
-.tool { min-height:56px; border-radius:15px; background:var(--tg-secondary-bg-color,#fff); color:var(--tg-text-color,#111); padding:11px; text-align:left; border:1px solid rgba(128,128,128,.13); cursor:pointer; }
+.tool { min-height:82px; border-radius:15px; display:flex; flex-direction:column; align-items:flex-start; justify-content:space-between; background:var(--tg-secondary-bg-color,#fff); color:var(--tg-text-color,#111); padding:11px; text-align:left; border:1px solid rgba(128,128,128,.13); cursor:pointer; }
 .tool strong { display:block; font-size:14px; line-height:1.2; margin-bottom:3px; }
-.tool span { color:var(--tg-hint-color,#8e8e93); font-size:11px; line-height:1.2; }
+.tool > span { display:flex; flex-direction:column; gap:3px; }\n.tool small { color:var(--tg-hint-color,#8e8e93); font-size:11px; line-height:1.2; }
 .muted { color:var(--tg-hint-color,#8e8e93); }
-.primary { background:var(--tg-button-color,#2481cc); color:var(--tg-button-text-color,#fff); border-radius:14px; min-height:48px; padding:0 16px; font-weight:700; cursor:pointer; }
-.secondary { background:color-mix(in srgb, var(--tg-button-color,#2481cc) 10%, transparent); color:var(--tg-link-color,#2481cc); border-radius:12px; min-height:40px; padding:0 13px; font-weight:650; cursor:pointer; }
+.primary { background:var(--app-accent); color:var(--tg-button-text-color,#fff); border-radius:14px; min-height:48px; padding:0 16px; font-weight:700; cursor:pointer; }
+.secondary { background:color-mix(in srgb, var(--tg-button-color,#2481cc) 10%, transparent); color:var(--app-accent); border-radius:12px; min-height:40px; padding:0 13px; font-weight:650; cursor:pointer; }
 .danger { color:#ff3b30; }
 .exercise-list { display:flex; flex-direction:column; gap:10px; }
 .exercise-card { padding:14px; }
