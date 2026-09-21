@@ -27,6 +27,7 @@ export async function getAppData(): Promise<AppData> {
     const res = await fetch(`${API_URL}`, { headers: headers() });
     if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
     const data = await res.json() as AppData;
+    data.workoutTypes = data.workoutTypes.map(t => t.id==='arms' ? {...t,name:'Руки и грудь'} : t.id==='back_shoulders' ? {...t,name:'Спина и плечи'} : t);
     saveData(data);
     return data;
   } catch (error) {
