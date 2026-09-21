@@ -36,6 +36,7 @@ function App(){
     syncQueue.current=syncQueue.current
       .catch(()=>undefined)
       .then(()=>saveRemoteData(next))
+      .then(()=>undefined)
       .catch(e=>setError(`Не удалось синхронизировать: ${String(e)}`));
     return syncQueue.current;
   };
