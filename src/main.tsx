@@ -130,7 +130,15 @@ function ExerciseCard({data,workout,we,ex,open,setOpen,onUpdate,onMove,onSkip,on
    const s:SetEntry={id:uid(),order:we.sets.length+1,weight:w,reps:r,comment:comment.trim()||undefined};
    onUpdate({sets:[...we.sets,s]}); setReps(''); setComment(''); haptic(); onTimer(120);
  };
- const copyLast=()=>{\n   const previous=lastExecution(data,workout.typeId,ex.id);\n   const p=previous?.workoutExercise.sets.at(-1);\n   if(!p)return;\n   setWeight(p.weight==null?'':String(p.weight));\n   setReps(p.reps==null?'':String(p.reps));\n   setComment(p.comment??'');\n   haptic();\n };
+ const copyLast=()=>{
+   const previous=lastExecution(data,workout.typeId,ex.id);
+   const p=previous?.workoutExercise.sets.at(-1);
+   if(!p)return;
+   setWeight(p.weight==null?'':String(p.weight));
+   setReps(p.reps==null?'':String(p.reps));
+   setComment(p.comment??'');
+   haptic();
+ };
  return <div className="card exercise-card">
   <div className="exercise-head"><button style={{background:'transparent',color:'inherit',padding:0,textAlign:'left',cursor:'pointer'}} onClick={setOpen}><div className="exercise-name">{ex.name}</div><div className="muted" style={{fontSize:12,marginTop:3}}>{we.skipped?'Пропущено':`${we.sets.length} подходов`}</div></button>
     <div className="exercise-actions"><button className="icon-btn" title="выше" onClick={()=>onMove(-1)}>↑</button><button className="icon-btn" title="ниже" onClick={()=>onMove(1)}>↓</button><button className="icon-btn" title="пропустить" onClick={onSkip}>×</button></div>
