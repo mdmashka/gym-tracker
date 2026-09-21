@@ -5,10 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint .",
-    "import:legacy": "node scripts/import-legacy.mjs"
+    "import:legacy": "node scripts/import-legacy.mjs",
+    "typecheck": "tsc -b"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",
