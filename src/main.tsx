@@ -68,23 +68,30 @@ function App(){
 
 function Top({title,sub,action}:{title:string;sub?:string;action?:React.ReactNode}){ return <div className="topbar"><div><div className="eyebrow">GYM LOG</div><h1>{title}</h1>{sub&&<div className="muted" style={{marginTop:5}}>{sub}</div>}</div>{action}</div> }
 
-function Home({data,onStart,onNav}:{data:AppData;onStart:(t:WorkoutTypeId)=>void;onNav:(s:Screen)=>void}){
- const today=todayISO();
- return <div className="screen">
-  <Top title="Сегодня" sub={formatLongDate(today)}/>
-  {data.workoutTypes.map(t=>{
-    const last=data.workouts.filter(w=>w.typeId===t.id&&w.status==='completed').sort((a,b)=>b.date.localeCompare(a.date))[0];
-    return <button className="card choice-card" key={t.id} onClick={()=>{haptic();onStart(t.id)}}><span className="meta"><span className="choice-title">{t.name}</span><span className="choice-sub">{last?`Последняя: ${formatDate(last.date)}`:'Пока нет тренировок'}</span></span><span className="chevron">›</span></button>
-  })}
-  <div className="tool-row">
-    <button className="tool" onClick={()=>onNav({kind:'calendar'})}><strong>Календарь</strong><span>Все тренировки</span></button>
-    <button className="tool" onClick={()=>onNav({kind:'summary'})}><strong>Сводка</strong><span>История по упражнениям</span></button>
-    <button className="tool" onClick={()=>onNav({kind:'settings'})}><strong>Настройки</strong><span>Шаблоны и упражнения</span></button>
-  </div>
-  {isRemoteConfigured && <div className="muted" style={{fontSize:12,textAlign:'center'}}>Синхронизация включена</div>}
- </div>
+function AppIcon({kind}:{kind:'legs'|'arms'|'back'|'calendar'|'chart'|'settings'}){
+ const paths={legs:'M12 3v7m0 0 4 4m-4-4-4 4m4-4v8m0 0-3 3m3-3 3 3',arms:'M8 19v-6l-2-2 2-5 3 3 3-3 2 5-2 2v6',back:'M8 4v6m8-6v6M8 10l-3 3m11-3 3 3M12 4v16',calendar:'M6 3v3m12-3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z',chart:'M5 19V9m7 10V5m7 14v-7',settings:'M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Zm0-5v2m0 9v2m0 5v-2m9-7h-2m-12 0H5m13.36-6.36-1.42 1.42M7.06 16.94l-1.42 1.42m12.72 0-1.42-1.42M7.06 7.06 5.64 5.64'};
+ return <span className={'app-icon app-icon-'+kind} aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={paths[kind]}/></svg></span>
 }
 
+function Home({data,onStart,onNav}:{data:AppData;onStart:(t:WorkoutTypeId)=>void;onNav:(s:Screen)=>void}){
+ const today=todayISO();
+ const icons:Record<WorkoutTypeId,'legs'|'arms'|'back'>={legs:'legs',arms:'arms',back_shoulders:'back'};
+ return <div className="screen">
+  <Top title="Сегодня" sub={formatLongDate(today)}/>
+  <div className="home-section-label">ТРЕНИРОВКА</div>
+  {data.workoutTypes.map(t=>{
+    const last=data.workouts.filter(w=>w.typeId===t.id&&w.status==='completed').sort((a,b)=>b.date.localeCompare(a.date))[0];
+    return <button className="card choice-card" key={t.id} onClick={()=>{haptic();onStart(t.id)}}><AppIcon kind={icons[t.id]}/><span className="meta"><span className="choice-title">{t.name}</span><span className="choice-sub">{last?'Последняя: '+formatDate(last.date):'Пока нет тренировок'}</span></span><span className="chevron">›</span></button>
+  })}
+  <div className="home-section-label">ЖУРНАЛ</div>
+  <div className="tool-row">
+    <button className="tool" onClick={()=>onNav({kind:'calendar'})}><AppIcon kind="calendar"/><span><strong>Календарь</strong><small>Все тренировки</small></span></button>
+    <button className="tool" onClick={()=>onNav({kind:'summary'})}><AppIcon kind="chart"/><span><strong>Сводка</strong><small>Прогресс</small></span></button>
+    <button className="tool" onClick={()=>onNav({kind:'settings'})}><AppIcon kind="settings"/><span><strong>Настройки</strong><small>Упражнения</small></span></button>
+  </div>
+  {isRemoteConfigured && <div className="muted sync-status">Синхронизация включена</div>}
+ </div>
+}
 function WorkoutScreen({data,workout,editing,onChange,onFinish,onTimer,onHome}:{data:AppData;workout:Workout;editing?:boolean;onChange:(w:Workout)=>void;onFinish:(w:Workout)=>void;onTimer:(s:number)=>void;onHome:()=>void}){
  const [currentId,setCurrentId]=useState<string|null>(()=>workout.exercises.find(x=>!x.skipped&&x.sets.length===0)?.id ?? workout.exercises.find(x=>!x.skipped)?.id ?? null);
  const [showAdd,setShowAdd]=useState(false);
