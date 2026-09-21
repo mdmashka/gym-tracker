@@ -20,7 +20,7 @@ h2 { font-size:22px; letter-spacing:-.02em; }
 .card { background:var(--tg-secondary-bg-color,#fff); border-radius:18px; padding:16px; border:1px solid rgba(128,128,128,.13); box-shadow:0 1px 2px rgba(0,0,0,.03); }
 .choice-card { display:flex; align-items:center; justify-content:space-between; min-height:86px; cursor:pointer; transition:transform .12s ease, opacity .12s; }
 .choice-card:active { transform:scale(.985); }
-.choice-card .meta { display:flex; flex-direction:column; gap:5px; }
+.choice-card .meta { display:flex; flex-direction:column; align-items:flex-start; width:100%; gap:5px; text-align:left; }
 .choice-title { font-size:19px; font-weight:700; }
 .choice-sub { color:var(--tg-hint-color,#8e8e93); font-size:13px; }
 .chevron { color:var(--tg-hint-color,#8e8e93); font-size:28px; }
