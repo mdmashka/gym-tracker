@@ -203,11 +203,84 @@ function SummaryScreen({data}:{data:AppData}){
  return <div className="screen"><Top title="Сводка" sub="Фильтры и экспорт"/><div className="card"><div className="filter-grid"><label className="field-label">Группа<select className="input" value={type} onChange={e=>{setType(e.target.value as WorkoutTypeId|'all');setExercise('all')}}><option value="all">Все группы</option>{data.workoutTypes.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label><label className="field-label">Упражнение<select className="input" value={exercise} onChange={e=>setExercise(e.target.value)}><option value="all">Все упражнения</option>{exercises.map(e=><option value={e.id} key={e.id}>{e.name}</option>)}</select></label><label className="field-label">От<input className="input" type="date" value={from} onChange={e=>setFrom(e.target.value)}/></label><label className="field-label">До<input className="input" type="date" value={to} onChange={e=>setTo(e.target.value)}/></label></div><div className="filter-actions"><button className="secondary" onClick={()=>{setType('all');setExercise('all');setFrom('');setTo('')}}>Сбросить</button></div></div>{rows.length===0?<div className="card muted">Нет данных по выбранному фильтру.</div>:<div className="summary-group">{rows.map((r,i)=><div className="card summary-row" key={i}><div className="summary-main"><div className="summary-name">{r.exercise}</div><div className="muted" style={{fontSize:12,marginTop:3}}>{formatDate(r.date)}</div></div><div className="summary-result">{r.result}</div></div>)}</div>}<div className="tool-row no-print"><button className="tool" onClick={exportXlsx}><strong>Excel</strong><span>Скачать .xlsx</span></button><button className="tool" onClick={print}><strong>PDF</strong><span>Сохранить PDF</span></button><button className="tool" onClick={exportCsv}><strong>CSV</strong><span>Дополнительный экспорт</span></button></div></div>
 }
 function SettingsScreen({data,onChange}:{data:AppData;onChange:(d:AppData)=>Promise<void>|void}){
- const [addName,setAddName]=useState(''); const [target,setTarget]=useState<WorkoutTypeId>(data.workoutTypes[0].id);
+ const [addName,setAddName]=useState('');
+ const [target,setTarget]=useState<WorkoutTypeId>(data.workoutTypes[0].id);
+ const [draggingId,setDraggingId]=useState<string|null>(null);
+ const holdTimer=useRef<number|null>(null);
  const exercises=getExercisesForType(data,target);
- const add=()=>{const name=addName.trim();if(!name)return;const id=uid();const max=Math.max(0,...data.exercises.filter(e=>e.workoutTypeId===target).map(e=>e.sortOrder));const ex:Exercise={id,name,workoutTypeId:target,loadType:'weight',sortOrder:max+1,isActive:true};onChange({...data,exercises:[...data.exercises,ex]});setAddName('');};
- const move=(ex:Exercise,dir:-1|1)=>{const arr=data.exercises.filter(e=>e.workoutTypeId===target&&e.isActive).sort((a,b)=>a.sortOrder-b.sortOrder);const i=arr.findIndex(x=>x.id===ex.id),j=i+dir;if(i<0||j<0||j>=arr.length)return;[arr[i],arr[j]]=[arr[j],arr[i]];const map=new Map(arr.map((x,idx)=>[x.id,idx+1]));onChange({...data,exercises:data.exercises.map(x=>map.has(x.id)?{...x,sortOrder:map.get(x.id)!}:x)});};
- return <div className="screen"><Top title="Настройки" sub="Шаблоны тренировок"/><div className="card"><div className="segmented">{data.workoutTypes.map(t=><button key={t.id} className={target===t.id?'active':''} onClick={()=>setTarget(t.id)}>{t.name}</button>)}</div><div style={{marginTop:8}}>{exercises.map(ex=><div className="settings-item" key={ex.id}><span>{ex.name}</span><span style={{display:'flex',gap:5}}><button className="icon-btn" onClick={()=>move(ex,-1)}>↑</button><button className="icon-btn" onClick={()=>move(ex,1)}>↓</button></span></div>)}</div></div><div className="card"><div className="exercise-name">Добавить упражнение</div><div className="form-grid" style={{marginTop:10}}><input className="input" value={addName} onChange={e=>setAddName(e.target.value)} placeholder="Название упражнения"/><button className="primary" onClick={add}>Добавить в шаблон</button></div><div className="muted" style={{fontSize:12,marginTop:8}}>Разовое добавление во время тренировки остаётся доступно отдельно.</div></div></div>
+
+ const normalize=(items:Exercise[])=>{
+   const order=new Map(items.map((x,i)=>[x.id,i+1]));
+   return data.exercises.map(x=>order.has(x.id)?{...x,sortOrder:order.get(x.id)!}:x);
+ };
+ const add=()=>{
+   const name=addName.trim(); if(!name)return;
+   const existing=data.exercises.find(e=>e.workoutTypeId===target&&e.name.trim().toLowerCase()===name.toLowerCase());
+   if(existing){
+     onChange({...data,exercises:data.exercises.map(e=>e.id===existing.id?{...e,isActive:true}:e)});
+   }else{
+     const max=Math.max(0,...data.exercises.filter(e=>e.workoutTypeId===target).map(e=>e.sortOrder));
+     const ex:Exercise={id:uid(),name,workoutTypeId:target,loadType:'weight',sortOrder:max+1,isActive:true};
+     onChange({...data,exercises:[...data.exercises,ex]});
+   }
+   setAddName('');
+ };
+ const remove=(id:string)=>{
+   const active=exercises.filter(e=>e.id!==id);
+   onChange({...data,exercises:normalize(active).map(x=>x.id===id?{...x,isActive:false}:x)});
+ };
+ const reorder=(fromId:string,toId:string)=>{
+   if(fromId===toId)return;
+   const arr=[...exercises];
+   const from=arr.findIndex(x=>x.id===fromId), to=arr.findIndex(x=>x.id===toId);
+   if(from<0||to<0)return;
+   const [item]=arr.splice(from,1);
+   arr.splice(to,0,item);
+   onChange({...data,exercises:normalize(arr)});
+ };
+ const startHold=(id:string,e:React.PointerEvent)=>{
+   if(e.pointerType==='mouse'&&e.button!==0)return;
+   if(holdTimer.current)window.clearTimeout(holdTimer.current);
+   holdTimer.current=window.setTimeout(()=>{
+     setDraggingId(id);
+     haptic();
+   },320);
+ };
+ const movePointer=(e:React.PointerEvent)=>{
+   if(!draggingId)return;
+   e.preventDefault();
+   const el=document.elementFromPoint(e.clientX,e.clientY)?.closest('.settings-item') as HTMLElement|null;
+   const overId=el?.dataset.id;
+   if(overId&&overId!==draggingId)reorder(draggingId,overId);
+ };
+ const endHold=()=>{
+   if(holdTimer.current)window.clearTimeout(holdTimer.current);
+   holdTimer.current=null;
+   setDraggingId(null);
+ };
+ return <div className="screen">
+  <Top title="Настройки" sub="Шаблоны тренировок"/>
+  <div className="card">
+   <div className="segmented">{data.workoutTypes.map(t=><button key={t.id} className={target===t.id?'active':''} onClick={()=>setTarget(t.id)}>{t.name}</button>)}</div>
+   <div className="settings-list" onPointerMove={movePointer} onPointerUp={endHold} onPointerCancel={endHold}>
+    {exercises.map(ex=><div className={'settings-item '+(draggingId===ex.id?'is-dragging':'')} data-id={ex.id} key={ex.id} onPointerDown={e=>startHold(ex.id,e)} onPointerUp={endHold}>
+      <span className="settings-drag-hint" aria-hidden="true">≡</span>
+      <span className="settings-name">{ex.name}</span>
+      <button className="settings-delete" aria-label={'Удалить '+ex.name+' из шаблона'} onPointerDown={e=>e.stopPropagation()} onClick={()=>remove(ex.id)}>−</button>
+    </div>)}
+    {exercises.length===0&&<div className="muted settings-empty">В шаблоне пока нет упражнений</div>}
+   </div>
+   <div className="settings-tip">Зажми упражнение и перетащи его на нужное место.</div>
+  </div>
+  <div className="card">
+   <div className="exercise-name">Добавить упражнение</div>
+   <div className="form-grid" style={{marginTop:10}}>
+    <input className="input" value={addName} onChange={e=>setAddName(e.target.value)} placeholder="Название упражнения"/>
+    <button className="primary" onClick={add}>Добавить в шаблон</button>
+   </div>
+   <div className="muted" style={{fontSize:12,marginTop:8}}>Разовое добавление во время тренировки остаётся доступно отдельно.</div>
+  </div>
+ </div>
 }
 function WorkoutMetaEditor({data,workout,onClose,onSave}:{data:AppData;workout:Workout;onClose:()=>void;onSave:(w:Workout)=>void}){
  const [date,setDate]=useState(workout.date); const [name,setName]=useState(workout.name??''); const [type,setType]=useState(workout.typeId);
