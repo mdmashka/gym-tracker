@@ -207,6 +207,7 @@ function SettingsScreen({data,onChange}:{data:AppData;onChange:(d:AppData)=>Prom
  const [target,setTarget]=useState<WorkoutTypeId>(data.workoutTypes[0].id);
  const [draggingId,setDraggingId]=useState<string|null>(null);
  const holdTimer=useRef<number|null>(null);
+ const holdStart=useRef<{x:number;y:number}|null>(null);
  const exercises=getExercisesForType(data,target);
 
  const normalize=(items:Exercise[])=>{
@@ -217,7 +218,8 @@ function SettingsScreen({data,onChange}:{data:AppData;onChange:(d:AppData)=>Prom
    const name=addName.trim(); if(!name)return;
    const existing=data.exercises.find(e=>e.workoutTypeId===target&&e.name.trim().toLowerCase()===name.toLowerCase());
    if(existing){
-     onChange({...data,exercises:data.exercises.map(e=>e.id===existing.id?{...e,isActive:true}:e)});
+     const max=Math.max(0,...data.exercises.filter(e=>e.workoutTypeId===target&&e.isActive&&e.id!==existing.id).map(e=>e.sortOrder));
+     onChange({...data,exercises:data.exercises.map(e=>e.id===existing.id?{...e,isActive:true,sortOrder:max+1}:e)});
    }else{
      const max=Math.max(0,...data.exercises.filter(e=>e.workoutTypeId===target).map(e=>e.sortOrder));
      const ex:Exercise={id:uid(),name,workoutTypeId:target,loadType:'weight',sortOrder:max+1,isActive:true};
@@ -240,13 +242,24 @@ function SettingsScreen({data,onChange}:{data:AppData;onChange:(d:AppData)=>Prom
  };
  const startHold=(id:string,e:React.PointerEvent)=>{
    if(e.pointerType==='mouse'&&e.button!==0)return;
+   holdStart.current={x:e.clientX,y:e.clientY};
    if(holdTimer.current)window.clearTimeout(holdTimer.current);
    holdTimer.current=window.setTimeout(()=>{
      setDraggingId(id);
      haptic();
    },320);
  };
+ const trackHold=(e:React.PointerEvent)=>{
+   if(draggingId||!holdStart.current)return;
+   const dx=e.clientX-holdStart.current.x, dy=e.clientY-holdStart.current.y;
+   if(Math.hypot(dx,dy)>8){
+     if(holdTimer.current)window.clearTimeout(holdTimer.current);
+     holdTimer.current=null;
+     holdStart.current=null;
+   }
+ };
  const movePointer=(e:React.PointerEvent)=>{
+   trackHold(e);
    if(!draggingId)return;
    e.preventDefault();
    const el=document.elementFromPoint(e.clientX,e.clientY)?.closest('.settings-item') as HTMLElement|null;
@@ -256,6 +269,7 @@ function SettingsScreen({data,onChange}:{data:AppData;onChange:(d:AppData)=>Prom
  const endHold=()=>{
    if(holdTimer.current)window.clearTimeout(holdTimer.current);
    holdTimer.current=null;
+   holdStart.current=null;
    setDraggingId(null);
  };
  return <div className="screen">
