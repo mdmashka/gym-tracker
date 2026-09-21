@@ -57,16 +57,16 @@ function App(){
   }} onNav={setScreen}/>;
   if(screen.kind==='workout') {
     const w0=data.workouts.find(w=>w.id===screen.workoutId);
-    body=w0?<WorkoutScreen data={data} workout={w0} onChange={w=>commit({...data,workouts:data.workouts.map(x=>x.id===w.id?w:x)})} onFinish={w=>commit({...data,workouts:data.workouts.map(x=>x.id===w.id?{...x,status:'completed',completedAt:new Date().toISOString()}:x)})} onTimer={(seconds)=>setTimer({until:Date.now()+seconds*1000})} onHome={()=>setScreen({kind:'home'})}/>:<NotFound/>;
+    body=w0?<WorkoutScreen data={data} workout={w0} editing={screen.mode==='edit'} onChange={w=>commit({...data,workouts:data.workouts.map(x=>x.id===w.id?w:x)})} onFinish={w=>commit({...data,workouts:data.workouts.map(x=>x.id===w.id?{...x,status:'completed',completedAt:new Date().toISOString()}:x)})} onTimer={(seconds)=>setTimer({until:Date.now()+seconds*1000})} onHome={()=>setScreen({kind:'home'})}/>:<NotFound/>;
   }
   if(screen.kind==='calendar') body=<CalendarScreen data={data} onOpen={w=>setScreen({kind:'history',workoutId:w.id})}/>;
-  if(screen.kind==='history') { const w=data.workouts.find(x=>x.id===screen.workoutId); body=w?<HistoryScreen data={data} workout={w}/>:<NotFound/>; }
+  if(screen.kind==='history') { const w=data.workouts.find(x=>x.id===screen.workoutId); body=w?<HistoryScreen data={data} workout={w} onEdit={()=>setScreen({kind:'workout',typeId:w.typeId,workoutId:w.id,mode:'edit'})} onDuplicate={()=>{const copy={...w,id:uid(),date:todayISO(),status:'draft',createdAt:new Date().toISOString(),completedAt:undefined,name:w.name};commit({...data,workouts:[...data.workouts,copy]}).then(()=>setScreen({kind:'workout',typeId:copy.typeId,workoutId:copy.id}));}}/>:<NotFound/>; }
   if(screen.kind==='summary') body=<SummaryScreen data={data}/>;
   if(screen.kind==='settings') body=<SettingsScreen data={data} onChange={commit}/>;
   return <div className="app">{error && <div className="notice no-print">{error}</div>}{body}{timer && <RestTimer timer={timer} onClose={()=>setTimer(null)}/>}</div>;
 }
 
-function Top({title,sub}:{title:string;sub?:string}){ return <div className="topbar"><div><div className="eyebrow">GYM LOG</div><h1>{title}</h1>{sub&&<div className="muted" style={{marginTop:5}}>{sub}</div>}</div></div> }
+function Top({title,sub,action}:{title:string;sub?:string;action?:React.ReactNode}){ return <div className="topbar"><div><div className="eyebrow">GYM LOG</div><h1>{title}</h1>{sub&&<div className="muted" style={{marginTop:5}}>{sub}</div>}</div>{action}</div> }
 
 function Home({data,onStart,onNav}:{data:AppData;onStart:(t:WorkoutTypeId)=>void;onNav:(s:Screen)=>void}){
  const today=todayISO();
@@ -85,9 +85,10 @@ function Home({data,onStart,onNav}:{data:AppData;onStart:(t:WorkoutTypeId)=>void
  </div>
 }
 
-function WorkoutScreen({data,workout,onChange,onFinish,onTimer,onHome}:{data:AppData;workout:Workout;onChange:(w:Workout)=>void;onFinish:(w:Workout)=>void;onTimer:(s:number)=>void;onHome:()=>void}){
+function WorkoutScreen({data,workout,editing,onChange,onFinish,onTimer,onHome}:{data:AppData;workout:Workout;editing?:boolean;onChange:(w:Workout)=>void;onFinish:(w:Workout)=>void;onTimer:(s:number)=>void;onHome:()=>void}){
  const [currentId,setCurrentId]=useState<string|null>(()=>workout.exercises.find(x=>!x.skipped&&x.sets.length===0)?.id ?? workout.exercises.find(x=>!x.skipped)?.id ?? null);
  const [showAdd,setShowAdd]=useState(false);
+ const [showMeta,setShowMeta]=useState(false);
  const exercises=[...workout.exercises].sort((a,b)=>a.order-b.order);
  const updateWe=(id:string,patch:Partial<WorkoutExercise>)=>onChange({...workout,exercises:workout.exercises.map(x=>x.id===id?{...x,...patch}:x)});
  const addOneShot=(exercise:Exercise)=>{
@@ -101,9 +102,10 @@ function WorkoutScreen({data,workout,onChange,onFinish,onTimer,onHome}:{data:App
  };
  const skip=(id:string)=>{updateWe(id,{skipped:true}); if(currentId===id)setCurrentId(null);};
  const finish=()=>{haptic('success');onFinish(workout);onHome();};
+ const saveEdit=()=>{haptic('success');onChange({...workout,status:'completed',completedAt:workout.completedAt??new Date().toISOString()});onHome();};
  const typeName=workoutTypeName(data,workout.typeId);
  return <div className="screen">
-  <Top title={typeName} sub={`${formatLongDate(workout.date)} · ${workout.status==='draft'?'в процессе':'завершено'}`}/>
+  <Top title={workout.name || typeName} sub={`${formatLongDate(workout.date)} · ${workout.status==='draft'?'в процессе':'завершено'}`} action={<button className="top-action" onClick={()=>setShowMeta(true)}>•••</button>}/>
   <div className="exercise-list">
    {exercises.map((we,idx)=>{
     const ex=data.exercises.find(e=>e.id===we.exerciseId); if(!ex)return null;
@@ -113,7 +115,8 @@ function WorkoutScreen({data,workout,onChange,onFinish,onTimer,onHome}:{data:App
   </div>
   <button className="secondary" onClick={()=>setShowAdd(true)}>+ Добавить упражнение</button>
   {showAdd && <div className="modal-backdrop" onClick={()=>setShowAdd(false)}><div className="modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><h2>Добавить упражнение</h2><button className="icon-btn" onClick={()=>setShowAdd(false)}>×</button></div><div className="exercise-list">{data.exercises.filter(e=>e.isActive).map(e=><button className="card choice-card" key={e.id} disabled={workout.exercises.some(w=>w.exerciseId===e.id)} style={{opacity:workout.exercises.some(w=>w.exerciseId===e.id)?0.45:1}} onClick={()=>{if(workout.exercises.some(w=>w.exerciseId===e.id))return;addOneShot(e);setShowAdd(false);}}><span className="meta"><span className="choice-title">{e.name}</span><span className="choice-sub">{workoutTypeName(data,e.workoutTypeId)}</span></span><span className="chevron">›</span></button>)}</div></div></div>}
-  <button className="primary" onClick={finish}>Завершить тренировку</button>
+  <button className="primary" onClick={editing?saveEdit:finish}>{editing?'Сохранить изменения':'Завершить тренировку'}</button>
+  {showMeta && <WorkoutMetaEditor data={data} workout={workout} onClose={()=>setShowMeta(false)} onSave={w=>{onChange(w);setShowMeta(false)}}/>}
  </div>
 }
 
@@ -121,6 +124,7 @@ function ExerciseCard({data,workout,we,ex,open,setOpen,onUpdate,onMove,onSkip,on
  const [weight,setWeight]=useState<string>(()=>{const prev=we.sets[we.sets.length-1]?.weight;return prev==null?'':String(prev)});
  const [reps,setReps]=useState<string>('');
  const [comment,setComment]=useState('');
+ const [menu,setMenu]=useState(false);
  const hist=latestTwoExecutions(data,workout.typeId,ex.id);
  useEffect(()=>{const prev=we.sets[we.sets.length-1]?.weight;if(prev!=null)setWeight(String(prev));},[we.sets.length]);
  const saveSet=()=>{
@@ -128,7 +132,7 @@ function ExerciseCard({data,workout,we,ex,open,setOpen,onUpdate,onMove,onSkip,on
    const r=reps.trim()===''?null:Number(reps.replace(',','.'));
    if(r===null || Number.isNaN(r)){ haptic('error'); return; }
    const s:SetEntry={id:uid(),order:we.sets.length+1,weight:w,reps:r,comment:comment.trim()||undefined};
-   onUpdate({sets:[...we.sets,s]}); setReps(''); setComment(''); haptic(); onTimer(120);
+   onUpdate({sets:[...we.sets,s]}); setReps(''); setComment(''); haptic(); onTimer(180);
  };
  const copyLast=()=>{
    const previous=lastExecution(data,workout.typeId,ex.id);
@@ -141,7 +145,7 @@ function ExerciseCard({data,workout,we,ex,open,setOpen,onUpdate,onMove,onSkip,on
  };
  return <div className="card exercise-card">
   <div className="exercise-head"><button style={{background:'transparent',color:'inherit',padding:0,textAlign:'left',cursor:'pointer'}} onClick={setOpen}><div className="exercise-name">{ex.name}</div><div className="muted" style={{fontSize:12,marginTop:3}}>{we.skipped?'Пропущено':`${we.sets.length} подходов`}</div></button>
-    <div className="exercise-actions"><button className="icon-btn" title="выше" onClick={()=>onMove(-1)}>↑</button><button className="icon-btn" title="ниже" onClick={()=>onMove(1)}>↓</button><button className="icon-btn" title="пропустить" onClick={onSkip}>×</button></div>
+    <div className="exercise-actions"><button className="icon-btn" title="выше" onClick={()=>onMove(-1)}>↑</button><button className="icon-btn" title="ниже" onClick={()=>onMove(1)}>↓</button><button className="icon-btn" title="действия" onClick={()=>setMenu(v=>!v)}>•••</button>{menu&&<div className="exercise-menu"><button onClick={()=>{setOpen();setMenu(false)}}>Редактировать</button><button onClick={()=>{if(window.confirm('Удалить это упражнение из тренировки?'))onSkip();setMenu(false)}}>Удалить</button></div>}</div>
   </div>
   {hist.length>0 && <div className="history-strip"><div className="history-date">Последние тренировки</div>{hist.map(h=><div key={h.workout.id} style={{marginBottom:4}}><strong style={{fontSize:13}}>{formatDate(h.workout.date)}</strong> <span className="muted" style={{fontSize:12}}>·</span> <span style={{fontSize:13}}>{h.workoutExercise.sets.map(s=>`${formatWeight(s.weight)}×${formatReps(s.reps)}`).join(' · ')}</span></div>)}</div>}
   {open && !we.skipped && <>
@@ -158,8 +162,9 @@ function ExerciseCard({data,workout,we,ex,open,setOpen,onUpdate,onMove,onSkip,on
 function RestTimer({timer,onClose}:{timer:{until:number};onClose:()=>void}){
  const [until,setUntil]=useState(timer.until);
  const [left,setLeft]=useState(Math.max(0,timer.until-Date.now()));
- useEffect(()=>{const id=setInterval(()=>{const n=Math.max(0,until-Date.now());setLeft(n);if(n===0){clearInterval(id);haptic('success');}},250);return()=>clearInterval(id)},[until]);
- return <div className="timer-fab"><div><div className="eyebrow">ОТДЫХ</div><div className="timer-time">{String(Math.floor(left/60000)).padStart(2,'0')}:{String(Math.floor((left%60000)/1000)).padStart(2,'0')}</div></div><div className="timer-controls"><button className="timer-btn" onClick={()=>{const n=until+30000;setUntil(n);setLeft(n-Date.now());}}>+30</button><button className="timer-btn" onClick={()=>{const n=Math.max(Date.now(),until-30000);setUntil(n);setLeft(n-Date.now());}}>−30</button><button className="timer-btn" onClick={onClose}>Готово</button></div></div>
+ const [expired,setExpired]=useState(false);
+ useEffect(()=>{const id=setInterval(()=>{const n=Math.max(0,until-Date.now());setLeft(n);if(n===0&&!expired){setExpired(true);haptic('success');}},250);return()=>clearInterval(id)},[until,expired]);
+ return <div className={`timer-fab ${expired?'timer-expired':''}`}><div><div className="eyebrow">ОТДЫХ</div><div className="timer-time">{expired?'Время вышло':`${String(Math.floor(left/60000)).padStart(2,'0')}:${String(Math.floor((left%60000)/1000)).padStart(2,'0')}`}</div></div><div className="timer-controls"><button className="timer-btn" onClick={()=>{const n=until+30000;setExpired(false);setUntil(n);setLeft(n-Date.now());}}>+30</button><button className="timer-btn" onClick={()=>{const n=Math.max(Date.now(),until-30000);setExpired(false);setUntil(n);setLeft(n-Date.now());}}>−30</button><button className="timer-btn" onClick={onClose}>Готово</button></div></div>
 }
 
 function CalendarScreen({data,onOpen}:{data:AppData;onOpen:(w:Workout)=>void}){
@@ -170,7 +175,7 @@ function CalendarScreen({data,onOpen}:{data:AppData;onOpen:(w:Workout)=>void}){
  return <div className="screen"><Top title="Календарь"/><div className="card"><div className="calendar-head"><button className="secondary" onClick={()=>setMonth(new Date(y,m-1,1))}>‹</button><strong>{month.toLocaleDateString('ru-RU',{month:'long',year:'numeric'})}</strong><button className="secondary" onClick={()=>setMonth(new Date(y,m+1,1))}>›</button></div><div className="month-grid" style={{marginTop:12}}>{['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map(x=><div className="cal-day-name" key={x}>{x}</div>)}{cells}</div></div></div>
 }
 
-function HistoryScreen({data,workout}:{data:AppData;workout:Workout}){ return <div className="screen"><Top title={workoutTypeName(data,workout.typeId)} sub={formatLongDate(workout.date)}/>{[...workout.exercises].sort((a,b)=>a.order-b.order).map(we=>{const ex=data.exercises.find(e=>e.id===we.exerciseId);if(!ex)return null;return <div className="card" key={we.id}><div className="exercise-name">{ex.name}</div>{we.skipped?<div className="muted" style={{marginTop:6}}>Пропущено</div>:we.sets.map(s=><div key={s.id} className="summary-row"><span>Подход {s.order}</span><span className="summary-result">{formatWeight(s.weight)} кг × {formatReps(s.reps)}</span></div>)}{we.notes&&<div className="history-empty">{we.notes}</div>}</div>})}</div> }
+function HistoryScreen({data,workout,onEdit,onDuplicate}:{data:AppData;workout:Workout;onEdit:()=>void;onDuplicate:()=>void}){ return <div className="screen"><Top title={workout.name || workoutTypeName(data,workout.typeId)} sub={formatLongDate(workout.date)}/><div className="action-row no-print"><button className="secondary" onClick={onEdit}>Редактировать</button><button className="secondary" onClick={onDuplicate}>Дублировать</button></div>{[...workout.exercises].sort((a,b)=>a.order-b.order).map(we=>{const ex=data.exercises.find(e=>e.id===we.exerciseId);if(!ex)return null;return <div className="card" key={we.id}><div className="exercise-name">{ex.name}</div>{we.skipped?<div className="muted" style={{marginTop:6}}>Пропущено</div>:we.sets.map(s=><div key={s.id} className="summary-row"><span>Подход {s.order}</span><span className="summary-result">{formatWeight(s.weight)} кг × {formatReps(s.reps)}</span></div>)}{we.notes&&<div className="history-empty">{we.notes}</div>}</div>})}</div> }
 
 function SummaryScreen({data}:{data:AppData}){
  const [type,setType]=useState<WorkoutTypeId>(data.workoutTypes[0].id);
@@ -190,6 +195,11 @@ function SettingsScreen({data,onChange}:{data:AppData;onChange:(d:AppData)=>Prom
  const move=(ex:Exercise,dir:-1|1)=>{const arr=data.exercises.filter(e=>e.workoutTypeId===target&&e.isActive).sort((a,b)=>a.sortOrder-b.sortOrder);const i=arr.findIndex(x=>x.id===ex.id),j=i+dir;if(i<0||j<0||j>=arr.length)return;[arr[i],arr[j]]=[arr[j],arr[i]];const map=new Map(arr.map((x,idx)=>[x.id,idx+1]));onChange({...data,exercises:data.exercises.map(x=>map.has(x.id)?{...x,sortOrder:map.get(x.id)!}:x)});};
  return <div className="screen"><Top title="Настройки" sub="Шаблоны тренировок"/><div className="card"><div className="segmented">{data.workoutTypes.map(t=><button key={t.id} className={target===t.id?'active':''} onClick={()=>setTarget(t.id)}>{t.name}</button>)}</div><div style={{marginTop:8}}>{exercises.map(ex=><div className="settings-item" key={ex.id}><span>{ex.name}</span><span style={{display:'flex',gap:5}}><button className="icon-btn" onClick={()=>move(ex,-1)}>↑</button><button className="icon-btn" onClick={()=>move(ex,1)}>↓</button></span></div>)}</div></div><div className="card"><div className="exercise-name">Добавить упражнение</div><div className="form-grid" style={{marginTop:10}}><input className="input" value={addName} onChange={e=>setAddName(e.target.value)} placeholder="Название упражнения"/><button className="primary" onClick={add}>Добавить в шаблон</button></div><div className="muted" style={{fontSize:12,marginTop:8}}>Разовое добавление во время тренировки остаётся доступно отдельно.</div></div></div>
 }
+function WorkoutMetaEditor({data,workout,onClose,onSave}:{data:AppData;workout:Workout;onClose:()=>void;onSave:(w:Workout)=>void}){
+ const [date,setDate]=useState(workout.date); const [name,setName]=useState(workout.name??''); const [type,setType]=useState(workout.typeId);
+ return <div className="modal-backdrop" onClick={onClose}><div className="modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><h2>Данные тренировки</h2><button className="icon-btn" onClick={onClose}>×</button></div><div className="form-grid"><label className="field-label">Название<input className="input" value={name} onChange={e=>setName(e.target.value)} placeholder={workoutTypeName(data,type)}/></label><label className="field-label">Тип<select className="input" value={type} onChange={e=>setType(e.target.value as WorkoutTypeId)}>{data.workoutTypes.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label><label className="field-label">Дата<input className="input" type="date" value={date} onChange={e=>setDate(e.target.value)}/></label><button className="primary" onClick={()=>onSave({...workout,name:name.trim()||undefined,typeId:type,date})}>Сохранить</button></div></div></div>
+}
+
 function NotFound(){return <div className="card">Не найдено.</div>}
 
 function downloadText(filename:string, content:string, type='text/plain;charset=utf-8') { const blob=new Blob([content],{type}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); }
