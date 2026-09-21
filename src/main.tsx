@@ -206,95 +206,16 @@ function SettingsScreen({data,onChange}:{data:AppData;onChange:(d:AppData)=>Prom
  const [addName,setAddName]=useState('');
  const [target,setTarget]=useState<WorkoutTypeId>(data.workoutTypes[0].id);
  const [draggingId,setDraggingId]=useState<string|null>(null);
- const holdTimer=useRef<number|null>(null);
- const holdStart=useRef<{x:number;y:number}|null>(null);
+ const dragId=useRef<string|null>(null);
  const exercises=getExercisesForType(data,target);
-
- const normalize=(items:Exercise[])=>{
-   const order=new Map(items.map((x,i)=>[x.id,i+1]));
-   return data.exercises.map(x=>order.has(x.id)?{...x,sortOrder:order.get(x.id)!}:x);
- };
- const add=()=>{
-   const name=addName.trim(); if(!name)return;
-   const existing=data.exercises.find(e=>e.workoutTypeId===target&&e.name.trim().toLowerCase()===name.toLowerCase());
-   if(existing){
-     const max=Math.max(0,...data.exercises.filter(e=>e.workoutTypeId===target&&e.isActive&&e.id!==existing.id).map(e=>e.sortOrder));
-     onChange({...data,exercises:data.exercises.map(e=>e.id===existing.id?{...e,isActive:true,sortOrder:max+1}:e)});
-   }else{
-     const max=Math.max(0,...data.exercises.filter(e=>e.workoutTypeId===target).map(e=>e.sortOrder));
-     const ex:Exercise={id:uid(),name,workoutTypeId:target,loadType:'weight',sortOrder:max+1,isActive:true};
-     onChange({...data,exercises:[...data.exercises,ex]});
-   }
-   setAddName('');
- };
- const remove=(id:string)=>{
-   const active=exercises.filter(e=>e.id!==id);
-   onChange({...data,exercises:normalize(active).map(x=>x.id===id?{...x,isActive:false}:x)});
- };
- const reorder=(fromId:string,toId:string)=>{
-   if(fromId===toId)return;
-   const arr=[...exercises];
-   const from=arr.findIndex(x=>x.id===fromId), to=arr.findIndex(x=>x.id===toId);
-   if(from<0||to<0)return;
-   const [item]=arr.splice(from,1);
-   arr.splice(to,0,item);
-   onChange({...data,exercises:normalize(arr)});
- };
- const startHold=(id:string,e:React.PointerEvent)=>{
-   if(e.pointerType==='mouse'&&e.button!==0)return;
-   holdStart.current={x:e.clientX,y:e.clientY};
-   if(holdTimer.current)window.clearTimeout(holdTimer.current);
-   holdTimer.current=window.setTimeout(()=>{
-     setDraggingId(id);
-     haptic();
-   },320);
- };
- const trackHold=(e:React.PointerEvent)=>{
-   if(draggingId||!holdStart.current)return;
-   const dx=e.clientX-holdStart.current.x, dy=e.clientY-holdStart.current.y;
-   if(Math.hypot(dx,dy)>8){
-     if(holdTimer.current)window.clearTimeout(holdTimer.current);
-     holdTimer.current=null;
-     holdStart.current=null;
-   }
- };
- const movePointer=(e:React.PointerEvent)=>{
-   trackHold(e);
-   if(!draggingId)return;
-   e.preventDefault();
-   const el=document.elementFromPoint(e.clientX,e.clientY)?.closest('.settings-item') as HTMLElement|null;
-   const overId=el?.dataset.id;
-   if(overId&&overId!==draggingId)reorder(draggingId,overId);
- };
- const endHold=()=>{
-   if(holdTimer.current)window.clearTimeout(holdTimer.current);
-   holdTimer.current=null;
-   holdStart.current=null;
-   setDraggingId(null);
- };
- return <div className="screen">
-  <Top title="Настройки" sub="Шаблоны тренировок"/>
-  <div className="card">
-   <div className="segmented">{data.workoutTypes.map(t=><button key={t.id} className={target===t.id?'active':''} onClick={()=>setTarget(t.id)}>{t.name}</button>)}</div>
-   <div className="settings-list" onPointerMove={movePointer} onPointerUp={endHold} onPointerCancel={endHold}>
-    {exercises.map(ex=><div className={'settings-item '+(draggingId===ex.id?'is-dragging':'')} data-id={ex.id} key={ex.id} onPointerDown={e=>startHold(ex.id,e)} onPointerUp={endHold}>
-      <span className="settings-drag-hint" aria-hidden="true">≡</span>
-      <span className="settings-name">{ex.name}</span>
-      <button className="settings-delete" aria-label={'Удалить '+ex.name+' из шаблона'} onPointerDown={e=>e.stopPropagation()} onClick={()=>remove(ex.id)}>−</button>
-    </div>)}
-    {exercises.length===0&&<div className="muted settings-empty">В шаблоне пока нет упражнений</div>}
-   </div>
-   <div className="settings-tip">Зажми упражнение и перетащи его на нужное место.</div>
-  </div>
-  <div className="card">
-   <div className="exercise-name">Добавить упражнение</div>
-   <div className="form-grid" style={{marginTop:10}}>
-    <input className="input" value={addName} onChange={e=>setAddName(e.target.value)} placeholder="Название упражнения"/>
-    <button className="primary" onClick={add}>Добавить в шаблон</button>
-   </div>
-   <div className="muted" style={{fontSize:12,marginTop:8}}>Разовое добавление во время тренировки остаётся доступно отдельно.</div>
-  </div>
- </div>
+ const normalize=(items:Exercise[])=>{const order=new Map(items.map((x,i)=>[x.id,i+1]));return data.exercises.map(x=>order.has(x.id)?{...x,sortOrder:order.get(x.id)!}:x)};
+ const add=()=>{const name=addName.trim();if(!name)return;const existing=data.exercises.find(e=>e.workoutTypeId===target&&e.name.trim().toLowerCase()===name.toLowerCase());if(existing){const max=Math.max(0,...data.exercises.filter(e=>e.workoutTypeId===target&&e.isActive&&e.id!==existing.id).map(e=>e.sortOrder));onChange({...data,exercises:data.exercises.map(e=>e.id===existing.id?{...e,isActive:true,sortOrder:max+1}:e)})}else{const max=Math.max(0,...data.exercises.filter(e=>e.workoutTypeId===target).map(e=>e.sortOrder));const ex:Exercise={id:uid(),name,workoutTypeId:target,loadType:'weight',sortOrder:max+1,isActive:true};onChange({...data,exercises:[...data.exercises,ex]})}setAddName('')};
+ const remove=(id:string)=>{const active=exercises.filter(e=>e.id!==id);onChange({...data,exercises:normalize(active).map(x=>x.id===id?{...x,isActive:false}:x)})};
+ const reorder=(fromId:string,toId:string)=>{if(fromId===toId)return;const arr=[...exercises];const from=arr.findIndex(x=>x.id===fromId),to=arr.findIndex(x=>x.id===toId);if(from<0||to<0)return;const [item]=arr.splice(from,1);arr.splice(to,0,item);onChange({...data,exercises:normalize(arr)})};
+ const startDrag=(id:string,e:React.PointerEvent)=>{if(e.pointerType==='mouse'&&e.button!==0)return;e.preventDefault();dragId.current=id;setDraggingId(id);haptic();(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId)};
+ const moveDrag=(e:React.PointerEvent)=>{if(!dragId.current)return;e.preventDefault();const el=document.elementFromPoint(e.clientX,e.clientY)?.closest('.settings-item') as HTMLElement|null;const overId=el?.dataset.id;if(overId&&overId!==dragId.current)reorder(dragId.current,overId)};
+ const endDrag=()=>{dragId.current=null;setDraggingId(null)};
+ return <div className="screen"><Top title="Настройки" sub="Шаблоны тренировок"/><div className="card"><div className="segmented">{data.workoutTypes.map(t=><button key={t.id} className={target===t.id?'active':''} onClick={()=>setTarget(t.id)}>{t.name}</button>)}</div><div className="settings-list">{exercises.map(ex=><div className={'settings-item '+(draggingId===ex.id?'is-dragging':'')} data-id={ex.id} key={ex.id} onPointerDown={e=>startDrag(ex.id,e)} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}><span className="settings-drag-hint" aria-hidden="true">≡</span><span className="settings-name">{ex.name}</span><button className="settings-delete" aria-label={'Удалить '+ex.name+' из шаблона'} onPointerDown={e=>e.stopPropagation()} onClick={()=>remove(ex.id)}>−</button></div>)}{exercises.length===0&&<div className="muted settings-empty">В шаблоне пока нет упражнений</div>}</div><div className="settings-tip">Нажми и удерживай строку, затем перетащи её в нужное место.</div></div><div className="card"><div className="exercise-name">Добавить упражнение</div><div className="form-grid" style={{marginTop:10}}><input className="input" value={addName} onChange={e=>setAddName(e.target.value)} placeholder="Название упражнения"/><button className="primary" onClick={add}>Добавить в шаблон</button></div><div className="muted" style={{fontSize:12,marginTop:8}}>Разовое добавление во время тренировки остаётся доступно отдельно.</div></div></div>
 }
 function WorkoutMetaEditor({data,workout,onClose,onSave}:{data:AppData;workout:Workout;onClose:()=>void;onSave:(w:Workout)=>void}){
  const [date,setDate]=useState(workout.date); const [name,setName]=useState(workout.name??''); const [type,setType]=useState(workout.typeId);
