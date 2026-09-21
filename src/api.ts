@@ -24,7 +24,7 @@ export async function getAppData(): Promise<AppData> {
   if (!hasTelegramSession()) return loadData();
 
   try {
-    const res = await fetch(`${API_URL}/data`, { headers: headers() });
+    const res = await fetch(`${API_URL}`, { headers: headers() });
     if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
     const data = await res.json() as AppData;
     saveData(data);
@@ -44,7 +44,7 @@ export async function saveRemoteData(data: AppData): Promise<AppData> {
 
   if (!hasTelegramSession()) return data;
 
-  const res = await fetch(`${API_URL}/data`, {
+  const res = await fetch(`${API_URL}`, {
     method: 'PUT',
     headers: { ...headers(), 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
