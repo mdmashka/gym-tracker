@@ -79,7 +79,7 @@ function Home({data,onStart,onNav}:{data:AppData;onStart:(t:WorkoutTypeId)=>void
   <div className="tool-row">
     <button className="tool" onClick={()=>onNav({kind:'calendar'})}><strong>Календарь</strong><span>Все тренировки</span></button>
     <button className="tool" onClick={()=>onNav({kind:'summary'})}><strong>Сводка</strong><span>История по упражнениям</span></button>
-    <button className="tool" onClick={()=>onNav({kind:'settings'})}><strong>Настройка</strong><span>Шаблоны и упражнения</span></button>
+    <button className="tool" onClick={()=>onNav({kind:'settings'})}><strong>Настройки</strong><span>Шаблоны и упражнения</span></button>
   </div>
   {isRemoteConfigured && <div className="muted" style={{fontSize:12,textAlign:'center'}}>Синхронизация включена</div>}
  </div>
