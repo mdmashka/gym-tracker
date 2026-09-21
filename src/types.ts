@@ -36,6 +36,7 @@ export interface WorkoutExercise {
 
 export interface Workout {
   id: string;
+  name?: string;
   typeId: WorkoutTypeId;
   date: string;
   status: 'draft' | 'completed';
@@ -52,7 +53,7 @@ export interface AppData {
 
 export type Screen =
   | { kind: 'home' }
-  | { kind: 'workout'; typeId: WorkoutTypeId; workoutId: string }
+  | { kind: 'workout'; typeId: WorkoutTypeId; workoutId: string; mode?: 'edit' }
   | { kind: 'calendar' }
   | { kind: 'summary' }
   | { kind: 'settings' }
