@@ -204,6 +204,5 @@ function WorkoutMetaEditor({data,workout,onClose,onSave}:{data:AppData;workout:W
 
 function NotFound(){return <div className="card">Не найдено.</div>}
 
-function downloadText(filename:string, content:string, type='text/plain;charset=utf-8') { const blob=new Blob([content],{type}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); }
 
 createRoot(document.getElementById('root')!).render(<App/>);
