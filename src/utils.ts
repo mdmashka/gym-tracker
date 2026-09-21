@@ -1,7 +1,13 @@
 import type { AppData, Exercise, SetEntry, Workout, WorkoutExercise, WorkoutTypeId } from './types';
 
 export const uid = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2,9)}`;
-export const todayISO = () => {\n  const d = new Date();\n  const y = d.getFullYear();\n  const m = String(d.getMonth() + 1).padStart(2, '0');\n  const day = String(d.getDate()).padStart(2, '0');\n  return `${y}-${m}-${day}`;\n};
+export const todayISO = () => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
 
 export function formatDate(date: string) {
   const d = new Date(`${date}T12:00:00`);
