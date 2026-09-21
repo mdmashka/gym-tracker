@@ -9,8 +9,8 @@ function userStorageKey() {
 
 const DEFAULT_TYPES = [
   { id: 'legs' as const, name: 'Ноги', slug: 'legs' },
-  { id: 'arms' as const, name: 'Руки', slug: 'arms' },
-  { id: 'back_shoulders' as const, name: 'Спина + плечи', slug: 'back_shoulders' },
+  { id: 'arms' as const, name: 'Руки и грудь', slug: 'arms' },
+  { id: 'back_shoulders' as const, name: 'Спина и плечи', slug: 'back_shoulders' },
 ];
 
 const DEFAULT_EXERCISES = [
