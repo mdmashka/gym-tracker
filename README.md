@@ -1,12 +1,8 @@
-# Gym Log — Telegram Mini App
+# Supabase setup
 
-A personal strength-training log designed around three workout templates.
+1. Run `migrations/001_init.sql` and `migrations/002_user_app_data.sql` in the Supabase SQL Editor.
+2. Deploy the `api` Edge Function.
+3. Set the Edge Function secrets `TELEGRAM_BOT_TOKEN` and `SUPABASE_SERVICE_ROLE_KEY`.
+4. Set Vercel environment variable `VITE_API_URL` to `https://YOUR_PROJECT_ID.supabase.co/functions/v1/api`.
 
-### Data isolation
-Each Telegram account has a separate record in `user_app_data`. The Edge Function validates Telegram Mini App `initData` before using the Telegram user ID. A user never receives another user’s history.
-
-See `docs/PRIVACY_SETUP.md` for Supabase/Vercel setup and one-time history import.
-
-
-## Vercel
-The Supabase API URL is embedded in `src/api.ts` because it is public client configuration, not a secret. No Vercel environment variable is required.
+Each Mini App request is authenticated from Telegram `initData`; data is stored under the validated Telegram user ID. A new Telegram user receives a blank set of workout templates and cannot see another user's workout history.
