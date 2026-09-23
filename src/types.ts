@@ -45,10 +45,15 @@ export interface Workout {
   exercises: WorkoutExercise[];
 }
 
+export interface AppSettings {
+  restTimerSeconds: number;
+}
+
 export interface AppData {
   workoutTypes: WorkoutType[];
   exercises: Exercise[];
   workouts: Workout[];
+  settings?: AppSettings;
 }
 
 export type Screen =
