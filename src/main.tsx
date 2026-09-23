@@ -75,21 +75,85 @@ function AppIcon({kind}:{kind:'legs'|'arms'|'back'|'calendar'|'chart'|'settings'
 
 function Home({data,onStart,onNav}:{data:AppData;onStart:(t:WorkoutTypeId)=>void;onNav:(s:Screen)=>void}){
  const today=todayISO();
+ const [showStart,setShowStart]=useState(false);
+ const completed=data.workouts.filter(w=>w.status==='completed');
+ const recent=completed.filter(w=>{
+   const d=new Date(`${today}T12:00:00`).getTime()-new Date(`${w.date}T12:00:00`).getTime();
+   return d>=0 && d<7*24*60*60*1000;
+ });
+ const volume=recent.reduce((sum,w)=>sum+w.exercises.reduce((s,we)=>s+we.sets.reduce((a,set)=>a+(set.weight??0)*(set.reps??0),0),0),0);
+ const minutes=recent.reduce((sum,w)=>{
+   if(!w.completedAt) return sum;
+   const start=new Date(w.createdAt).getTime(), end=new Date(w.completedAt).getTime();
+   const mins=Math.max(0,Math.round((end-start)/60000));
+   return sum+(mins>0&&mins<240?mins:0);
+ },0);
+ const last=[...completed].sort((a,b)=>(b.completedAt??b.date).localeCompare(a.completedAt??a.date))[0];
+ const draft=data.workouts.find(w=>w.date===today&&w.status==='draft');
+ const monthDate=new Date();
+ const y=monthDate.getFullYear(), m=monthDate.getMonth();
+ const first=new Date(y,m,1), start=(first.getDay()+6)%7, days=new Date(y,m+1,0).getDate();
+ const doneDates=new Set(completed.filter(w=>w.date.startsWith(`${y}-${String(m+1).padStart(2,'0')}-`)).map(w=>w.date));
+ const cells:React.ReactNode[]=[];
+ for(let i=0;i<start;i++) cells.push(<span key={'empty'+i}/>);
+ for(let d=1;d<=days;d++){
+   const date=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+   cells.push(<span key={date} className={`activity-day ${doneDates.has(date)?'done':''} ${date===today?'current':''}`}>{d}</span>);
+ }
  const icons:Record<WorkoutTypeId,'legs'|'arms'|'back'>={legs:'legs',arms:'arms',back_shoulders:'back'};
- return <div className="screen">
-  <Top title="Сегодня" sub={formatLongDate(today)}/>
-  <div className="home-section-label">ТРЕНИРОВКА</div>
-  {data.workoutTypes.map(t=>{
-    const last=data.workouts.filter(w=>w.typeId===t.id&&w.status==='completed').sort((a,b)=>b.date.localeCompare(a.date))[0];
-    return <button className="card choice-card" key={t.id} onClick={()=>{haptic();onStart(t.id)}}><AppIcon kind={icons[t.id]}/><span className="meta"><span className="choice-title">{t.name}</span><span className="choice-sub">{last?'Последняя: '+formatDate(last.date):'Пока нет тренировок'}</span></span><span className="chevron">›</span></button>
-  })}
-  <div className="home-section-label">ЖУРНАЛ</div>
-  <div className="tool-row">
-    <button className="tool" onClick={()=>onNav({kind:'calendar'})}><AppIcon kind="calendar"/><span><strong>Календарь</strong><small>Все тренировки</small></span></button>
-    <button className="tool" onClick={()=>onNav({kind:'summary'})}><AppIcon kind="chart"/><span><strong>Сводка</strong><small>Прогресс</small></span></button>
-    <button className="tool" onClick={()=>onNav({kind:'settings'})}><AppIcon kind="settings"/><span><strong>Настройки</strong><small>Упражнения</small></span></button>
-  </div>
-  {isRemoteConfigured && <div className="muted sync-status">Синхронизация включена</div>}
+ const startWorkout=(typeId:WorkoutTypeId)=>{haptic();setShowStart(false);onStart(typeId)};
+ return <div className="screen home-screen">
+   <div className="home-hero">
+     <div className="home-eyebrow">ТРЕНИРОВКИ</div>
+     <h1>Сегодня</h1>
+     <div className="home-date">{new Date(`${today}T12:00:00`).toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long'})}</div>
+     <button className="home-start primary" onClick={()=>{haptic();setShowStart(true)}}>{draft?'Продолжить тренировку':'Начать тренировку'}</button>
+   </div>
+
+   <section className="home-section">
+     <h2>Твоя неделя</h2>
+     <div className="week-card">
+       <div className="week-stat"><strong>{recent.length}</strong><span>тренировки</span></div>
+       <div className="week-stat"><strong>{volume.toLocaleString('ru-RU')}</strong><span>кг объёма</span></div>
+       <div className="week-stat week-stat-wide"><strong>{Math.floor(minutes/60)}:{String(minutes%60).padStart(2,'0')}</strong><span>в зале</span></div>
+     </div>
+   </section>
+
+   {last && <section className="home-section">
+     <h2>Последняя тренировка</h2>
+     <button className="last-workout-card" onClick={()=>onNav({kind:'history',workoutId:last.id})}>
+       <span className="last-workout-icon">↗</span>
+       <span className="last-workout-info"><strong>{last.name||workoutTypeName(data,last.typeId)}</strong><span>{formatDate(last.date)} · {last.exercises.filter(x=>!x.skipped).length} упражнений{last.completedAt&&last.createdAt?' · '+Math.max(1,Math.round((new Date(last.completedAt).getTime()-new Date(last.createdAt).getTime())/60000))+' мин':''}</span></span>
+       <span className="last-workout-chevron">›</span>
+     </button>
+   </section>}
+
+   <section className="home-section">
+     <h2>Активность</h2>
+     <div className="activity-card">
+       <div className="activity-head"><span>{monthDate.toLocaleDateString('ru-RU',{month:'long'})}</span><span className="activity-count">{completed.filter(w=>w.date.startsWith(`${y}-${String(m+1).padStart(2,'0')}-`)).length} тренировок</span></div>
+       <div className="activity-weekdays">{['П','В','С','Ч','П','С','В'].map((x,i)=><span key={i}>{x}</span>)}</div>
+       <div className="activity-grid">{cells}</div>
+     </div>
+   </section>
+
+   <div className="home-tools">
+     <button onClick={()=>onNav({kind:'calendar'})}><span>Календарь</span><small>Все тренировки</small><b>›</b></button>
+     <button onClick={()=>onNav({kind:'summary'})}><span>Прогресс</span><small>Твои результаты</small><b>›</b></button>
+     <button onClick={()=>onNav({kind:'settings'})}><span>Настройки</span><small>Приложение</small><b>›</b></button>
+   </div>
+   {isRemoteConfigured && <div className="muted sync-status">Синхронизация включена</div>}
+
+   {showStart && <div className="modal-backdrop" onClick={()=>setShowStart(false)}>
+     <div className="modal start-modal" onClick={e=>e.stopPropagation()}>
+       <div className="modal-head"><h2>Новая тренировка</h2><button className="icon-btn" onClick={()=>setShowStart(false)}>×</button></div>
+       <div className="start-options">{data.workoutTypes.map(t=><button className="start-option" key={t.id} onClick={()=>startWorkout(t.id)}>
+         <span className={`start-option-icon start-${icons[t.id]}`}><AppIcon kind={icons[t.id]}/></span>
+         <span><strong>{t.name}</strong><small>{data.workouts.filter(w=>w.typeId===t.id&&w.status==='completed').length?'Последняя: '+formatDate([...data.workouts].filter(w=>w.typeId===t.id&&w.status==='completed').sort((a,b)=>b.date.localeCompare(a.date))[0].date):'Начать с нуля'}</small></span>
+         <b>›</b>
+       </button>)}</div>
+     </div>
+   </div>}
  </div>
 }
 function WorkoutScreen({data,workout,editing,onChange,onFinish,onTimer,onHome}:{data:AppData;workout:Workout;editing?:boolean;onChange:(w:Workout)=>void;onFinish:(w:Workout)=>void;onTimer:(s:number)=>void;onHome:()=>void}){
