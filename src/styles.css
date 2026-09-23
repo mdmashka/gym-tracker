@@ -131,3 +131,233 @@ h2 { font-size:22px; letter-spacing:-.02em; }
 .export-period{font-size:12px;margin-top:4px}.menu-row{display:block;width:100%;text-align:left;padding:12px;border-radius:11px;background:transparent;color:inherit;font-weight:600}.menu-row:active{background:#f2f2f7}.menu-row.danger{color:#ff3b30}
 .settings-group{padding:16px}.timer-setting{border-top:0;margin-top:6px;padding-bottom:2px}.timer-setting strong{font-size:14px}.timer-setting .muted{font-size:11px;margin-top:3px}.danger-button{background:#ff3b30!important;box-shadow:none!important}
 @media(max-width:520px){.tool-row{grid-template-columns:1fr 1fr}.tool:last-child{grid-column:span 2}.record-badge strong{font-size:11px}}
+
+
+/* HOME — dark Apple-style layout */
+:root{color-scheme:dark}
+html,body,#root{background:#000!important}
+body{color:#f5f5f7!important}
+.app{
+  --tg-bg-color:#000;
+  --tg-secondary-bg-color:#2c2c2e;
+  --tg-text-color:#f5f5f7;
+  --tg-hint-color:#a1a1a6;
+  --tg-button-color:#ff375f;
+  --tg-link-color:#ff375f;
+  --tg-button-text-color:#fff;
+  max-width:680px;
+  background:#000;
+  color:#f5f5f7;
+}
+.home-screen{gap:0;padding-bottom:20px}
+.home-hero{padding:4px 2px 0}
+.home-eyebrow{font-size:12px;line-height:1;color:#a1a1a6;font-weight:700;letter-spacing:.08em;margin-bottom:13px}
+.home-hero h1{font-size:46px;line-height:1.02;font-weight:800;letter-spacing:-.055em;color:#f5f5f7}
+.home-date{font-size:20px;line-height:1.25;color:#a1a1a6;margin-top:12px;text-transform:none}
+.home-start{
+  width:100%;
+  min-height:72px;
+  margin-top:34px;
+  border-radius:24px;
+  font-size:21px;
+  letter-spacing:-.02em;
+  box-shadow:0 14px 32px rgba(255,55,95,.20);
+}
+.home-section{margin-top:56px}
+.home-section h2{
+  font-size:25px;
+  line-height:1.1;
+  font-weight:750;
+  letter-spacing:-.04em;
+  margin:0 2px 20px;
+  color:#f5f5f7;
+}
+.week-card{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  padding:36px;
+  background:#2c2c2e;
+  border:1px solid #48484a;
+  border-radius:30px;
+}
+.week-stat{
+  min-height:122px;
+  padding:28px 24px;
+  border:2px solid #48484a;
+  border-radius:25px;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+}
+.week-stat-wide{grid-column:1/-1}
+.week-stat strong{
+  font-size:48px;
+  line-height:1;
+  letter-spacing:-.05em;
+  font-weight:800;
+  color:#f5f5f7;
+  font-variant-numeric:tabular-nums;
+}
+.week-stat span{
+  margin-top:12px;
+  font-size:18px;
+  color:#a1a1a6;
+}
+.last-workout-card{
+  width:100%;
+  min-height:124px;
+  display:flex;
+  align-items:center;
+  gap:22px;
+  padding:20px 28px;
+  text-align:left;
+  color:#f5f5f7;
+  background:#2c2c2e;
+  border:1px solid #48484a;
+  border-radius:30px;
+  cursor:pointer;
+}
+.last-workout-card:active{transform:scale(.99)}
+.last-workout-icon{
+  width:88px;height:88px;flex:0 0 88px;
+  display:flex;align-items:center;justify-content:center;
+  border-radius:27px;
+  background:rgba(255,55,95,.14);
+  color:#ff375f;
+  font-size:46px;
+  font-weight:300;
+}
+.last-workout-info{min-width:0;display:flex;flex-direction:column;gap:8px;flex:1}
+.last-workout-info strong{font-size:22px;line-height:1.1;letter-spacing:-.025em}
+.last-workout-info span{font-size:17px;color:#a1a1a6;line-height:1.2}
+.last-workout-chevron{font-size:42px;font-weight:200;color:#a1a1a6}
+.activity-card{
+  padding:30px 28px 28px;
+  background:#2c2c2e;
+  border:1px solid #48484a;
+  border-radius:30px;
+}
+.activity-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:22px;
+  font-size:20px;
+  color:#f5f5f7;
+}
+.activity-count{font-size:14px;color:#a1a1a6}
+.activity-weekdays,.activity-grid{
+  display:grid;
+  grid-template-columns:repeat(7,1fr);
+  gap:8px;
+}
+.activity-weekdays{margin-bottom:8px}
+.activity-weekdays span{
+  text-align:center;
+  color:#8e8e93;
+  font-size:12px;
+  font-weight:600;
+}
+.activity-grid span{
+  aspect-ratio:1;
+  min-width:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:50%;
+  color:#d1d1d6;
+  font-size:14px;
+}
+.activity-grid span.done{
+  background:#ff375f;
+  color:#fff;
+  font-weight:750;
+}
+.activity-grid span.current{
+  outline:2px solid #f5f5f7;
+  outline-offset:-2px;
+}
+.activity-grid span.done.current{
+  outline:2px solid #ff9caf;
+}
+.home-tools{
+  display:flex;
+  flex-direction:column;
+  gap:1px;
+  margin-top:30px;
+  overflow:hidden;
+  border-radius:22px;
+  background:#2c2c2e;
+  border:1px solid #3a3a3c;
+}
+.home-tools button{
+  position:relative;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  width:100%;
+  min-height:72px;
+  padding:16px 48px 16px 20px;
+  background:#2c2c2e;
+  color:#f5f5f7;
+  text-align:left;
+  border-bottom:1px solid #3a3a3c;
+}
+.home-tools button:last-child{border-bottom:0}
+.home-tools button:active{background:#38383a}
+.home-tools span{font-size:17px;font-weight:650}
+.home-tools small{font-size:13px;color:#a1a1a6;margin-top:4px}
+.home-tools b{position:absolute;right:18px;top:23px;font-size:27px;font-weight:300;color:#8e8e93}
+.sync-status{margin-top:14px;color:#8e8e93}
+.start-modal{
+  background:#2c2c2e;
+  color:#f5f5f7;
+  border:1px solid #48484a;
+}
+.start-options{display:flex;flex-direction:column;gap:8px}
+.start-option{
+  width:100%;
+  display:flex;
+  align-items:center;
+  gap:13px;
+  min-height:72px;
+  padding:10px 12px;
+  border-radius:17px;
+  background:#3a3a3c;
+  color:#f5f5f7;
+  text-align:left;
+}
+.start-option:active{background:#48484a}
+.start-option>span:nth-child(2){display:flex;flex-direction:column;gap:4px;flex:1}
+.start-option strong{font-size:16px}
+.start-option small{font-size:12px;color:#a1a1a6}
+.start-option>b{font-size:28px;font-weight:300;color:#a1a1a6}
+.start-option-icon .app-icon{width:44px;height:44px}
+.modal .icon-btn{background:#48484a;color:#f5f5f7}
+.modal{background:#2c2c2e;color:#f5f5f7}
+.card{background:#2c2c2e;color:#f5f5f7}
+.input{background:#3a3a3c;color:#f5f5f7;border:1px solid #48484a}
+.input::placeholder{color:#8e8e93}
+.secondary{background:rgba(255,55,95,.13);color:#ff6b87}
+.icon-btn{background:#3a3a3c;color:#f5f5f7}
+.history-strip{background:#3a3a3c}
+.timer-fab{background:rgba(44,44,46,.94);color:#f5f5f7;border:1px solid #48484a}
+.timer-btn{background:#3a3a3c;color:#f5f5f7}
+@media(max-width:520px){
+  .app{padding-left:18px;padding-right:18px}
+  .home-hero h1{font-size:43px}
+  .home-start{min-height:68px}
+  .week-card{padding:16px;gap:12px;border-radius:25px}
+  .week-stat{min-height:112px;padding:22px 20px;border-radius:21px}
+  .week-stat strong{font-size:39px}
+  .week-stat span{font-size:16px;margin-top:9px}
+  .last-workout-card{padding:17px 18px;gap:16px;border-radius:25px}
+  .last-workout-icon{width:68px;height:68px;flex-basis:68px;border-radius:21px;font-size:36px}
+  .last-workout-info strong{font-size:19px}
+  .last-workout-info span{font-size:14px}
+  .last-workout-chevron{font-size:34px}
+  .activity-card{padding:24px 17px;border-radius:25px}
+  .activity-weekdays,.activity-grid{gap:5px}
+  .activity-grid span{font-size:12px}
+}
