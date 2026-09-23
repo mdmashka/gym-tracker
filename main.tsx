@@ -96,7 +96,7 @@ function WorkoutScreen({data,workout,onChange,onFinish,onTimer,onHome}:{data:App
   </div>
   <button className="secondary" onClick={()=>setShowAdd(true)}>+ Добавить упражнение</button>
   {showAdd && <div className="modal-backdrop" onClick={()=>setShowAdd(false)}><div className="modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><h2>Добавить упражнение</h2><button className="icon-btn" onClick={()=>setShowAdd(false)}>×</button></div><div className="exercise-list">{data.exercises.filter(e=>e.isActive).map(e=><button className="card choice-card" key={e.id} disabled={workout.exercises.some(w=>w.exerciseId===e.id)} style={{opacity:workout.exercises.some(w=>w.exerciseId===e.id)?0.45:1}} onClick={()=>{if(workout.exercises.some(w=>w.exerciseId===e.id))return;addOneShot(e);setShowAdd(false);}}><span className="meta"><span className="choice-title">{e.name}</span><span className="choice-sub">{workoutTypeName(data,e.workoutTypeId)}</span></span><span className="chevron">›</span></button>)}</div></div></div>}
-  <button className="primary" onClick={finish}>Завершить тренировку</button>
+  <div className="workout-finish-bar"><button className="primary workout-finish-button" onClick={finish}>Завершить тренировку</button></div>
  </div>
 }
 
@@ -113,7 +113,8 @@ function ExerciseCard({data,workout,we,ex,open,setOpen,onUpdate,onMove,onSkip,on
    const s:SetEntry={id:uid(),order:we.sets.length+1,weight:w,reps:r,comment:comment.trim()||undefined};
    onUpdate({sets:[...we.sets,s]}); setReps(''); setComment(''); haptic(); onTimer(120);
  };
- const copyLast=()=>{const p=we.sets.at(-1);if(!p){return;}setWeight(p.weight==null?'':String(p.weight));setReps(p.reps==null?'':String(p.reps));setComment(p.comment??'');haptic();};
+ const previousSet=we.sets.length>0?we.sets[we.sets.length-1]:null;
+ const copyLast=()=>{if(!previousSet){haptic('error');return;}setWeight(previousSet.weight==null?'':String(previousSet.weight));setReps(previousSet.reps==null?'':String(previousSet.reps));setComment(previousSet.comment??'');haptic();};
  return <div className="card exercise-card">
   <div className="exercise-head"><button style={{background:'transparent',color:'inherit',padding:0,textAlign:'left',cursor:'pointer'}} onClick={setOpen}><div className="exercise-name">{ex.name}</div><div className="muted" style={{fontSize:12,marginTop:3}}>{we.skipped?'Пропущено':`${we.sets.length} подходов`}</div></button>
     <div className="exercise-actions"><button className="icon-btn" title="выше" onClick={()=>onMove(-1)}>↑</button><button className="icon-btn" title="ниже" onClick={()=>onMove(1)}>↓</button><button className="icon-btn" title="пропустить" onClick={onSkip}>×</button></div>
@@ -122,7 +123,7 @@ function ExerciseCard({data,workout,we,ex,open,setOpen,onUpdate,onMove,onSkip,on
   {open && !we.skipped && <>
     <div style={{marginTop:8}}>{we.sets.map(s=><div className="set-line" key={s.id}><span className="set-num">{s.order}</span><span>{formatWeight(s.weight)} кг</span><span>{formatReps(s.reps)} повт.</span><button className="icon-btn" onClick={()=>onUpdate({sets:we.sets.filter(x=>x.id!==s.id).map((x,i)=>({...x,order:i+1}))})}>×</button></div>)}</div>
     <div className="set-line" style={{borderTop:we.sets.length?'1px solid rgba(128,128,128,.11)':'0'}}><span className="set-num">{we.sets.length+1}</span><input className="input" inputMode="decimal" placeholder="Вес" value={weight} onChange={e=>setWeight(e.target.value)}/><input className="input" inputMode="numeric" placeholder="Повторы" value={reps} onChange={e=>setReps(e.target.value)}/><button className="icon-btn" onClick={saveSet}>✓</button></div>
-    <div className="set-actions"><button className="secondary" onClick={copyLast}>Скопировать</button><button className="secondary" onClick={()=>saveSet()}>+ Подход</button></div>
+    <div className="set-actions"><button className="secondary" onClick={copyLast} disabled={!previousSet}>Скопировать</button><button className="secondary" onClick={()=>saveSet()}>+ Подход</button></div>
     <textarea className="input comment-input notes" placeholder="Комментарий к следующему подходу (необязательно)" value={comment} onChange={e=>setComment(e.target.value)}/>
     {we.notes && <div className="history-empty">Импортированная заметка: {we.notes}</div>}
     <button className="primary" style={{marginTop:10,width:'100%'}} onClick={onClose}>Готово</button>
