@@ -113,3 +113,21 @@ h2 { font-size:22px; letter-spacing:-.02em; }
   background:linear-gradient(to bottom, transparent, var(--tg-bg-color,#f2f2f7) 22%);
 }
 .workout-finish-bar .primary{width:100%;min-height:52px;box-shadow:0 8px 24px rgba(0,0,0,.12)}
+
+/* Apple Health-inspired visual layer */
+:root{--app-accent:#ff375f;--app-accent-soft:rgba(255,55,95,.10);}
+.app{max-width:680px;padding-top:calc(18px + env(safe-area-inset-top));padding-left:18px;padding-right:18px}
+.topbar{margin:2px 2px 8px}.eyebrow{font-size:11px;letter-spacing:.08em}h1{font-size:34px;letter-spacing:-.045em;font-weight:750}
+.screen{gap:12px}.card{border:0;border-radius:20px;padding:16px}.choice-card{min-height:78px;padding:14px 16px}
+.choice-card:active,.tool:active,.primary:active,.secondary:active{transform:scale(.985)}
+.home-section-label{font-size:10px;margin:8px 4px 0;color:#8e8e93}.tool-row{gap:9px}.tool{min-height:84px;border:0;border-radius:18px;padding:13px;box-shadow:0 1px 0 rgba(0,0,0,.03)}
+.tool .app-icon{background:var(--app-accent-soft);color:var(--app-accent)}.primary{background:linear-gradient(135deg,#ff375f,#ff5c7a);min-height:50px;border-radius:16px;box-shadow:0 8px 22px rgba(255,55,95,.20)}
+.secondary{background:var(--app-accent-soft);color:#d92f52;border-radius:13px}.workout-finish-bar .primary{min-height:54px}
+.exercise-card{padding:16px;border-radius:20px}.exercise-name{font-size:17px}.history-strip{background:#f6f6f8;border:0}.input{height:46px;border:0;background:#f2f2f7;border-radius:13px}.input:focus{border:0;box-shadow:0 0 0 2px rgba(255,55,95,.20)}
+.timer-fab{bottom:calc(18px + env(safe-area-inset-bottom));border:0;border-radius:22px;box-shadow:0 14px 40px rgba(0,0,0,.20);backdrop-filter:blur(20px)}.timer-time{font-size:29px}
+.progress-hero{background:linear-gradient(145deg,#fff,#fff0f3);padding:20px}.progress-kicker,.settings-section-title{font-size:10px;letter-spacing:.08em;font-weight:750;color:#8e8e93}.progress-big{font-size:52px;font-weight:800;letter-spacing:-.06em;color:#ff375f;line-height:1;margin-top:5px}
+.progress-select{margin-top:10px}.progress-card{padding:16px}.progress-card-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.record-badge{background:var(--app-accent-soft);border-radius:12px;padding:7px 9px;text-align:right;white-space:nowrap}.record-badge span{display:block;font-size:9px;color:#d92f52;font-weight:750;letter-spacing:.05em}.record-badge strong{font-size:12px}
+.mini-chart{height:112px;display:flex;align-items:flex-end;gap:5px;padding:14px 2px 4px;border-bottom:1px solid #eee}.chart-col{height:100%;flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:3px;min-width:0}.chart-bar{width:100%;max-width:22px;border-radius:7px 7px 3px 3px;background:linear-gradient(to top,#ff375f,#ff8ca3);min-height:8px}.chart-col span{font-size:9px;color:#8e8e93;white-space:nowrap}
+.export-period{font-size:12px;margin-top:4px}.menu-row{display:block;width:100%;text-align:left;padding:12px;border-radius:11px;background:transparent;color:inherit;font-weight:600}.menu-row:active{background:#f2f2f7}.menu-row.danger{color:#ff3b30}
+.settings-group{padding:16px}.timer-setting{border-top:0;margin-top:6px;padding-bottom:2px}.timer-setting strong{font-size:14px}.timer-setting .muted{font-size:11px;margin-top:3px}.danger-button{background:#ff3b30!important;box-shadow:none!important}
+@media(max-width:520px){.tool-row{grid-template-columns:1fr 1fr}.tool:last-child{grid-column:span 2}.record-badge strong{font-size:11px}}
