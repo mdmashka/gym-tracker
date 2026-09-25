@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import * as XLSX from 'xlsx';
-import type { AppData, Exercise, Screen, SetEntry, Workout, WorkoutExercise, WorkoutTypeId } from './types';
+import type { AppData, Exercise, LoadType, Screen, SetEntry, Workout, WorkoutExercise, WorkoutTypeId } from './types';
 import { getAppData, isRemoteConfigured, saveRemoteData, notifyTimerExpired, ensureMenuButton, deleteRemoteWorkout } from './api';
 import { formatDate, formatLongDate, formatReps, formatWeight, getExercisesForType, latestTwoExecutions, lastExecution, startWorkout, todayISO, uid, workoutTypeName, csvEscape, buildExportRows, ensureWorkoutExercises, downloadText } from './utils';
 import { getTelegram, haptic, initTelegram } from './telegram';
@@ -41,7 +41,7 @@ function App(){
       .catch(e=>{ setError(`Не удалось синхронизировать: ${String(e)}`); });
     return syncQueue.current;
   };
-  if(loading) return <div className="splash-screen"><div className="splash-title">gym tracker</div><div className="splash-subtitle">мини-приложение</div><div className="splash-loader"><span/><span/><span/></div></div>;
+  if(loading) return <div className="splash-screen"><div className="splash-title">gym tracker</div><div className="splash-subtitle">мини-приложение</div><a className="splash-author" href="https://t.me/marieblokh" target="_blank" rel="noreferrer">vibe coded by @marieblokh</a><div className="splash-loader"><span/><span/><span/></div></div>;
   if(!data) return <div className="app"><div className="card"><h2>Не удалось открыть журнал</h2><p className="muted">{error}</p></div></div>;
 
   let body:React.ReactNode;
@@ -233,7 +233,7 @@ function WorkoutScreen({data,workout,editing,onChange,onFinish,onTimer,onHome,on
  const updateWe=(id:string,patch:Partial<WorkoutExercise>)=>onChange({...workout,exercises:workout.exercises.map(x=>x.id===id?{...x,...patch}:x)});
  const addOneShot=(exercise:Exercise)=>{
    const max=Math.max(0,...workout.exercises.map(x=>x.order));
-   const we:WorkoutExercise={id:uid(),exerciseId:exercise.id,order:max+1,skipped:false,sets:[]};
+   const we:WorkoutExercise={id:uid(),exerciseId:exercise.id,order:max+1,skipped:false,loadType:exercise.loadType==='bodyweight'?'bodyweight':'weight',sets:[]};
    onChange({...workout,exercises:[...workout.exercises,we]}); setCurrentId(we.id);
  };
  const move=(id:string,dir:-1|1)=>{
@@ -296,36 +296,68 @@ function WorkoutScreen({data,workout,editing,onChange,onFinish,onTimer,onHome,on
 }
 
 function ExerciseCard({data,workout,we,ex,open,setOpen,onUpdate,onMove,onSkip,onDelete,onTimer,onClose}:{data:AppData;workout:Workout;we:WorkoutExercise;ex:Exercise;open:boolean;setOpen:()=>void;onUpdate:(p:Partial<WorkoutExercise>)=>void;onMove:(d:-1|1)=>void;onSkip:()=>void;onDelete:()=>void;onTimer:(s:number)=>void;onClose:()=>void}){
- const [weight,setWeight]=useState<string>(()=>{const prev=we.sets[we.sets.length-1]?.weight;return prev==null?'':String(prev)});
+ const [weight,setWeight]=useState<string>(()=>{const prev=we.sets[we.sets.length-1]?.weight;return prev==null||prev===0?'':String(prev)});
  const [reps,setReps]=useState<string>('');
  const [comment,setComment]=useState('');
  const [menu,setMenu]=useState(false);
  const [pendingSetDelete,setPendingSetDelete]=useState<string|null>(null);
  const [pendingExerciseDelete,setPendingExerciseDelete]=useState(false);
- const hist=latestTwoExecutions(data,workout.typeId,ex.id); const bodyweight=ex.loadType==='bodyweight';
- useEffect(()=>{const prev=we.sets[we.sets.length-1]?.weight;if(prev!=null)setWeight(String(prev));},[we.sets.length]);
+ const hist=latestTwoExecutions(data,workout.typeId,ex.id);
+ const loadType:LoadType=we.loadType ?? (ex.loadType==='bodyweight'?'bodyweight':'weight');
+ const bodyweight=loadType==='bodyweight';
+
+ useEffect(()=>{
+   const prev=we.sets[we.sets.length-1]?.weight;
+   if(prev!=null&&prev!==0)setWeight(String(prev));
+ },[we.sets.length]);
+
+ const changeLoadType=(next:LoadType)=>{
+   const normalized:LoadType=next==='bodyweight'?'bodyweight':'weight';
+   onUpdate({loadType:normalized});
+   if(normalized==='weight'){
+     const prev=we.sets.slice().reverse().find(s=>s.weight!=null&&s.weight!==0);
+     setWeight(prev?String(prev.weight):'');
+   }else{
+     setWeight('');
+   }
+ };
+
  const saveSet=()=>{
    const w=bodyweight ? 0 : (weight.trim()===''?null:Number(weight.replace(',','.')));
    const r=reps.trim()===''?null:Number(reps.replace(',','.'));
    if(r===null || Number.isNaN(r)){ haptic('error'); return; }
-   const s:SetEntry={id:uid(),order:we.sets.length+1,weight:w,reps:r,comment:comment.trim()||undefined};
-   onUpdate({sets:[...we.sets,s]}); setReps(''); setComment(''); haptic(); if(data.settings?.restTimerEnabled!==false) onTimer(data.settings?.restTimerSeconds ?? 120);
+   const s:SetEntry={id:uid(),order:we.sets.length+1,weight:w,reps:r,loadType:bodyweight?'bodyweight':'weight',comment:comment.trim()||undefined};
+   onUpdate({sets:[...we.sets,s]});
+   setReps('');
+   setComment('');
+   haptic();
+   if(data.settings?.restTimerEnabled!==false) onTimer(data.settings?.restTimerSeconds ?? 120);
  };
+
  const copyLast=()=>{
    const p=we.sets.at(-1);
    if(!p)return;
-   setWeight(p.weight==null?'':String(p.weight));
+   setWeight(p.weight==null||p.weight===0?'':String(p.weight));
    setReps(p.reps==null?'':String(p.reps));
    setComment(p.comment??'');
    haptic();
  };
+
  return <div className="card exercise-card">
-  <div className="exercise-head"><button style={{background:'transparent',color:'inherit',padding:0,textAlign:'left',cursor:'pointer'}} onClick={setOpen}><div className="exercise-name">{ex.name}</div><div className="muted" style={{fontSize:12,marginTop:3}}>{we.skipped?'Пропущено':`${we.sets.length} подходов`}</div></button>
+  <div className="exercise-head"><button style={{background:'transparent',color:'inherit',padding:0,textAlign:'left',cursor:'pointer'}} onClick={setOpen}><div className="exercise-name">{ex.name}</div><div className="muted" style={{fontSize:12,marginTop:3}}>{we.skipped?'Пропущено':we.sets.length+' подходов'}</div></button>
     <div className="exercise-actions"><button className="icon-btn" title="выше" onClick={()=>onMove(-1)}>↑</button><button className="icon-btn" title="ниже" onClick={()=>onMove(1)}>↓</button><button className="icon-btn" title="действия" onClick={()=>setMenu(v=>!v)}>•••</button>{menu&&<div className="exercise-menu"><button onClick={()=>{setOpen();setMenu(false)}}>Редактировать</button><button onClick={()=>{setPendingExerciseDelete(true);setMenu(false)}}>Удалить</button></div>}</div>
   </div>
-  {hist.length>0 && <div className="history-strip"><div className="history-date">Последние тренировки</div>{hist.map(h=><div key={h.workout.id} style={{marginBottom:4}}><strong style={{fontSize:13}}>{formatDate(h.workout.date)}</strong> <span className="muted" style={{fontSize:12}}>·</span> <span style={{fontSize:13}}>{h.workoutExercise.sets.map(s=>`${formatWeight(s.weight)}×${formatReps(s.reps)}`).join(' · ')}</span></div>)}</div>}
+  {hist.length>0 && <div className="history-strip"><div className="history-date">Последние тренировки</div>{hist.map(h=><div key={h.workout.id} style={{marginBottom:4}}><strong style={{fontSize:13}}>{formatDate(h.workout.date)}</strong> <span className="muted" style={{fontSize:12}}>·</span> <span style={{fontSize:13}}>{h.workoutExercise.sets.map(s=>s.loadType==='bodyweight'?'Собственный вес × '+formatReps(s.reps):formatWeight(s.weight)+'×'+formatReps(s.reps)).join(' · ')}</span></div>)}</div>}
   {open && !we.skipped && <>
-    <div style={{marginTop:8}}>{we.sets.map(s=><div className="set-line" key={s.id}><span className="set-num">{s.order}</span><span>{bodyweight?'Собственный вес':formatWeight(s.weight)+' кг'}</span><span>{formatReps(s.reps)} повт.</span><button className="icon-btn" onClick={()=>setPendingSetDelete(s.id)}>×</button></div>)}</div>
+    <div className="workout-load-picker">
+      <div className="workout-load-title">Режим нагрузки</div>
+      <div className="segmented compact">
+        <button type="button" className={loadType==='weight'?'active':''} onClick={()=>changeLoadType('weight')}>С весом</button>
+        <button type="button" className={loadType==='bodyweight'?'active':''} onClick={()=>changeLoadType('bodyweight')}>Собственный вес</button>
+      </div>
+    </div>
+    {we.sets.length>0&&<div className="workout-load-note">Режим применяется к новым подходам. Сохранённые подходы сохраняют свой режим.</div>}
+    <div style={{marginTop:8}}>{we.sets.map(s=><div key={s.id} className="set-line"><span className="set-num">{s.order}</span><span>{s.loadType==='bodyweight'?'Собственный вес':formatWeight(s.weight)+' кг'}</span><span>{formatReps(s.reps)} повт.</span><button className="icon-btn" onClick={()=>setPendingSetDelete(s.id)}>×</button></div>)}</div>
     {pendingSetDelete && <div className="modal-backdrop" onClick={()=>setPendingSetDelete(null)}><div className="modal confirm-modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><h2>Удалить подход?</h2><button className="icon-btn" onClick={()=>setPendingSetDelete(null)}>×</button></div><p className="muted">Этот подход будет удалён из тренировки.</p><div className="action-row" style={{marginTop:14}}><button className="secondary" onClick={()=>setPendingSetDelete(null)}>Отмена</button><button className="primary danger-button" onClick={()=>{onUpdate({sets:we.sets.filter(x=>x.id!==pendingSetDelete).map((x,i)=>({...x,order:i+1}))});setPendingSetDelete(null)}}>Удалить</button></div></div></div>}
     {pendingExerciseDelete && <div className="modal-backdrop" onClick={()=>setPendingExerciseDelete(false)}><div className="modal confirm-modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><h2>Удалить упражнение?</h2><button className="icon-btn" onClick={()=>setPendingExerciseDelete(false)}>×</button></div><p className="muted">Упражнение и все сохранённые подходы исчезнут из этой тренировки.</p><div className="action-row" style={{marginTop:14}}><button className="secondary" onClick={()=>setPendingExerciseDelete(false)}>Отмена</button><button className="primary danger-button" onClick={()=>{onDelete();setPendingExerciseDelete(false)}}>Удалить</button></div></div></div>}
     <div className="set-line" style={{gridTemplateColumns:'28px minmax(0,1fr) minmax(0,1fr) 36px',borderTop:we.sets.length?'1px solid rgba(128,128,128,.11)':'0'}}><span className="set-num">{we.sets.length+1}</span>{bodyweight?<span className="bodyweight-label">Собственный вес</span>:<input className="input" inputMode="decimal" placeholder="Вес" value={weight} onChange={e=>setWeight(e.target.value)}/>}<input className="input" inputMode="numeric" placeholder="Повторы" value={reps} onChange={e=>setReps(e.target.value)}/><button className="icon-btn" onClick={saveSet}>✓</button></div>
@@ -336,7 +368,6 @@ function ExerciseCard({data,workout,we,ex,open,setOpen,onUpdate,onMove,onSkip,on
   </>}
  </div>
 }
-
 function RestTimer({timer,onClose}:{timer:{until:number};onClose:()=>void}){
  const [until,setUntil]=useState(timer.until); const [left,setLeft]=useState(Math.max(0,timer.until-Date.now())); const [expired,setExpired]=useState(false); const notified=useRef(false);
  useEffect(()=>{const id=setInterval(()=>{const n=Math.max(0,until-Date.now());setLeft(n);if(n===0&&!expired){setExpired(true);haptic('success');if(!notified.current){notified.current=true;notifyTimerExpired().catch(()=>undefined);}}},250);return()=>clearInterval(id)},[until,expired]);
@@ -407,28 +438,151 @@ function ProgressExerciseCard({stat}:{stat:{ex:Exercise;points:Array<{date:strin
  return <div className="card progress-card"><div className="progress-card-head"><div><div className="exercise-name">{stat.ex.name}</div><div className="muted">{stat.points.length} подходов</div></div>{stat.best&&<div className="record-badge"><span>ЛУЧШИЙ</span><strong>{formatWeight(stat.best.weight)} кг × {formatReps(stat.best.reps)}</strong></div>}</div><div className="mini-chart">{weighted.slice(-12).map((p,i)=><div className="chart-col" key={i}><div className="chart-bar" style={{height:`${max===min?48:18+((Number(p.weight)-min)/(max-min))*62}px`}}/><span>{formatWeight(p.weight)}</span></div>)}</div><div className="recent-results">{recent.map((p,i)=><div className="summary-row" key={i}><span>{formatDate(p.date)}</span><span className="summary-result">{p.bodyweight?'Собственный вес × '+formatReps(p.reps):formatWeight(p.weight)+' кг × '+formatReps(p.reps)}</span></div>)}</div></div>;
 }
 function SettingsScreen({data,onChange}:{data:AppData;onChange:(d:AppData)=>Promise<void>|void}){
- const [addName,setAddName]=useState(''); const [target,setTarget]=useState<WorkoutTypeId>(data.workoutTypes[0].id); const [draggingId,setDraggingId]=useState<string|null>(null); const dragId=useRef<string|null>(null);
+ const [addName,setAddName]=useState('');
+ const [target,setTarget]=useState<WorkoutTypeId>(data.workoutTypes[0]?.id ?? '');
+ const [draggingId,setDraggingId]=useState<string|null>(null);
+ const [dirty,setDirty]=useState(false);
+ const [savedFlash,setSavedFlash]=useState(false);
+ const dragId=useRef<string|null>(null);
  const settings=data.settings ?? {restTimerSeconds:120,restTimerEnabled:true,theme:'dark' as const,accentColor:'red' as const};
- const exercises=getExercisesForType(data,target); const normalize=(items:Exercise[])=>{const order=new Map(items.map((x,i)=>[x.id,i+1]));return data.exercises.map(x=>order.has(x.id)?{...x,sortOrder:order.get(x.id)!}:x)};
+ const activeFor=(typeId:WorkoutTypeId)=>data.exercises.filter(e=>e.workoutTypeId===typeId&&e.isActive).sort((a,b)=>a.sortOrder-b.sortOrder);
+ const [draftExercises,setDraftExercises]=useState<Exercise[]>(()=>activeFor(target).map(e=>({...e})));
+
+ useEffect(()=>{
+   if(!dirty) setDraftExercises(activeFor(target).map(e=>({...e})));
+ },[data.exercises,target,dirty]);
+
  const updateSettings=(patch:Partial<typeof settings>)=>onChange({...data,settings:{...settings,...patch}});
- const add=()=>{const name=addName.trim();if(!name)return;const existing=data.exercises.find(e=>e.workoutTypeId===target&&e.name.trim().toLowerCase()===name.toLowerCase());if(existing){const max=Math.max(0,...data.exercises.filter(e=>e.workoutTypeId===target&&e.isActive&&e.id!==existing.id).map(e=>e.sortOrder));onChange({...data,exercises:data.exercises.map(e=>e.id===existing.id?{...e,isActive:true,sortOrder:max+1}:e)})}else{const max=Math.max(0,...data.exercises.filter(e=>e.workoutTypeId===target).map(e=>e.sortOrder));const ex:Exercise={id:uid(),name,workoutTypeId:target,loadType:'weight',sortOrder:max+1,isActive:true};onChange({...data,exercises:[...data.exercises,ex]})}setAddName('')};
- const remove=(id:string)=>{const active=exercises.filter(e=>e.id!==id);onChange({...data,exercises:normalize(active).map(x=>x.id===id?{...x,isActive:false}:x)})};
- const reorder=(fromId:string,toId:string)=>{if(fromId===toId)return;const arr=[...exercises];const from=arr.findIndex(x=>x.id===fromId),to=arr.findIndex(x=>x.id===toId);if(from<0||to<0)return;const [item]=arr.splice(from,1);arr.splice(to,0,item);onChange({...data,exercises:normalize(arr)})};
- const startDrag=(id:string,e:React.PointerEvent)=>{if(e.pointerType==='mouse'&&e.button!==0)return;e.preventDefault();dragId.current=id;setDraggingId(id);haptic();(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)};
- const moveDrag=(e:PointerEvent|React.PointerEvent)=>{if(!dragId.current)return;e.preventDefault();const el=document.elementFromPoint(e.clientX,e.clientY)?.closest('.settings-item') as HTMLElement|null;const overId=el?.dataset.id;if(overId&&overId!==dragId.current)reorder(dragId.current,overId)};
+
+ const saveTemplate=async()=>{
+   const existingById=new Map(data.exercises.map(e=>[e.id,e]));
+   const updated=data.exercises.map(e=>{
+     if(e.workoutTypeId!==target)return e;
+     const draft=draftExercises.find(x=>x.id===e.id);
+     return draft?{...draft,sortOrder:draftExercises.findIndex(x=>x.id===draft.id)+1,isActive:true}:{...e,isActive:false};
+   });
+   const newExercises=draftExercises
+     .filter(e=>!existingById.has(e.id))
+     .map((e,i)=>({...e,sortOrder:i+1,isActive:true}));
+   const next={...data,exercises:[...updated,...newExercises]};
+   await onChange(next);
+   setDraftExercises(draftExercises.map((e,i)=>({...e,sortOrder:i+1,isActive:true})));
+   setDirty(false);
+   setSavedFlash(true);
+   window.setTimeout(()=>setSavedFlash(false),1400);
+ };
+
+ const switchTemplate=(nextTarget:WorkoutTypeId)=>{
+   if(nextTarget===target)return;
+   if(dirty)void saveTemplate();
+   setTarget(nextTarget);
+   setDraftExercises(activeFor(nextTarget).map(e=>({...e})));
+   setDirty(false);
+ };
+
+ const add=()=>{
+   const name=addName.trim();
+   if(!name)return;
+   const existing=draftExercises.find(e=>e.name.trim().toLowerCase()===name.toLowerCase());
+   if(existing){setAddName('');return;}
+   const ex:Exercise={id:uid(),name,workoutTypeId:target,loadType:'weight',sortOrder:draftExercises.length+1,isActive:true};
+   setDraftExercises(v=>[...v,ex]);
+   setDirty(true);
+   setSavedFlash(false);
+   setAddName('');
+ };
+
+ const remove=(id:string)=>{
+   setDraftExercises(v=>v.filter(x=>x.id!==id).map((x,i)=>({...x,sortOrder:i+1})));
+   setDirty(true);
+   setSavedFlash(false);
+ };
+
+ const reorder=(fromId:string,toId:string)=>{
+   if(fromId===toId)return;
+   setDraftExercises(prev=>{
+     const arr=[...prev];
+     const from=arr.findIndex(x=>x.id===fromId),to=arr.findIndex(x=>x.id===toId);
+     if(from<0||to<0)return prev;
+     const [item]=arr.splice(from,1);
+     arr.splice(to,0,item);
+     return arr.map((x,i)=>({...x,sortOrder:i+1}));
+   });
+   setDirty(true);
+   setSavedFlash(false);
+ };
+
+ const setLoadType=(id:string,loadType:LoadType)=>{
+   setDraftExercises(v=>v.map(e=>e.id===id?{...e,loadType}:e));
+   setDirty(true);
+   setSavedFlash(false);
+ };
+
+ const startDrag=(id:string,e:React.PointerEvent)=>{
+   if(e.pointerType==='mouse'&&e.button!==0)return;
+   e.preventDefault();
+   dragId.current=id;
+   setDraggingId(id);
+   haptic();
+   (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+ };
+ const moveDrag=(e:PointerEvent|React.PointerEvent)=>{
+   if(!dragId.current)return;
+   e.preventDefault();
+   const el=document.elementFromPoint(e.clientX,e.clientY)?.closest('.settings-item') as HTMLElement|null;
+   const overId=el?.dataset.id;
+   if(overId&&overId!==dragId.current)reorder(dragId.current,overId);
+ };
  const endDrag=()=>{dragId.current=null;setDraggingId(null);document.body.style.overflow='';document.body.style.touchAction=''};
- useEffect(()=>{if(!draggingId)return;const move=(e:PointerEvent)=>moveDrag(e);const end=()=>endDrag();document.addEventListener('pointermove',move,{passive:false});document.addEventListener('pointerup',end,{passive:false});document.addEventListener('pointercancel',end,{passive:false});document.body.style.overflow='hidden';document.body.style.touchAction='none';return()=>{document.removeEventListener('pointermove',move);document.removeEventListener('pointerup',end);document.removeEventListener('pointercancel',end);document.body.style.overflow='';document.body.style.touchAction=''}},[draggingId]);
+
+ useEffect(()=>{
+   if(!draggingId)return;
+   const move=(e:PointerEvent)=>moveDrag(e);
+   const end=()=>endDrag();
+   document.addEventListener('pointermove',move,{passive:false});
+   document.addEventListener('pointerup',end,{passive:false});
+   document.addEventListener('pointercancel',end,{passive:false});
+   document.body.style.overflow='hidden';
+   document.body.style.touchAction='none';
+   return()=>{
+     document.removeEventListener('pointermove',move);
+     document.removeEventListener('pointerup',end);
+     document.removeEventListener('pointercancel',end);
+     document.body.style.overflow='';
+     document.body.style.touchAction='';
+   };
+ },[draggingId]);
+
  const accentOptions=[['red','Красный','#ff375f'],['pink','Розовый','#ff2d55'],['purple','Фиолетовый','#af52de'],['blue','Синий','#0a84ff'],['teal','Бирюзовый','#14b8a6'],['green','Зелёный','#30d158'],['orange','Оранжевый','#ff9f0a']] as const;
+
+ if(!target)return <div className="screen"><Top title="Настройки" sub="Приложение и шаблоны"/><div className="card muted">Нет доступных шаблонов.</div></div>;
+
  return <div className="screen"><Top title="Настройки" sub="Приложение и шаблоны"/>
   <div className="card settings-group"><div className="settings-section-title">ОФОРМЛЕНИЕ</div>
    <div className="settings-item"><div><strong>Тема</strong></div><div className="segmented compact"><button className={settings.theme==='light'?'active':''} onClick={()=>updateSettings({theme:'light'})}>Белая</button><button className={settings.theme==='dark'?'active':''} onClick={()=>updateSettings({theme:'dark'})}>Чёрная</button></div></div>
-   <div className="accent-picker"><div className="accent-picker-title">Акцентный цвет</div><div className="accent-options">{accentOptions.map(([id,name,color])=><button key={id} title={name} aria-label={name} className={`accent-swatch ${settings.accentColor===id?'selected':''}`} style={{'--swatch':color} as React.CSSProperties} onClick={()=>updateSettings({accentColor:id})}><span/></button>)}</div></div>
+   <div className="accent-picker"><div className="accent-picker-title">Акцентный цвет</div><div className="accent-options">{accentOptions.map(([id,name,color])=><button key={id} title={name} aria-label={name} className={'accent-swatch '+(settings.accentColor===id?'selected':'')} style={{'--swatch':color} as React.CSSProperties} onClick={()=>updateSettings({accentColor:id})}><span/></button>)}</div></div>
   </div>
   <div className="card settings-group"><div className="settings-section-title">ТАЙМЕР ОТДЫХА</div>
-   <div className="settings-item timer-setting"><div><strong>Таймер после подхода</strong><div className="muted">{settings.restTimerEnabled?'Запускается автоматически':'Таймер отключён'}</div></div><button className={`ios-switch ${settings.restTimerEnabled?'on':''}`} aria-label="Таймер отдыха" onClick={()=>updateSettings({restTimerEnabled:!settings.restTimerEnabled})}><span/></button></div>
+   <div className="settings-item timer-setting"><div><strong>Таймер после подхода</strong><div className="muted">{settings.restTimerEnabled?'Запускается автоматически':'Таймер отключён'}</div></div><button className={'ios-switch '+(settings.restTimerEnabled?'on':'')} aria-label="Таймер отдыха" onClick={()=>updateSettings({restTimerEnabled:!settings.restTimerEnabled})}><span/></button></div>
    {settings.restTimerEnabled&&<div className="settings-item timer-setting"><div><strong>Длительность</strong><div className="muted">Шаг 30 секунд</div></div><select className="input timer-select" value={settings.restTimerSeconds} onChange={e=>updateSettings({restTimerSeconds:Number(e.target.value)})}>{Array.from({length:20},(_,i)=>(i+1)*30).map(s=><option key={s} value={s}>{Math.floor(s/60)}:{String(s%60).padStart(2,'0')}</option>)}</select></div>}
   </div>
-  <div className="card"><div className="settings-section-title">УПРАЖНЕНИЯ</div><div className="segmented">{data.workoutTypes.map(t=><button key={t.id} className={target===t.id?'active':''} onClick={()=>setTarget(t.id)}>{t.name}</button>)}</div><div className="settings-list">{exercises.map(ex=><div className={'settings-item '+(draggingId===ex.id?'is-dragging':'')} data-id={ex.id} key={ex.id} onPointerDown={e=>startDrag(ex.id,e)} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}><span className="settings-drag-hint" aria-hidden="true">≡</span><span className="settings-name">{ex.name}</span><button className={'bodyweight-toggle '+(ex.loadType==='bodyweight'?'on':'')} onPointerDown={e=>e.stopPropagation()} onClick={()=>onChange({...data,exercises:data.exercises.map(x=>x.id===ex.id?{...x,loadType:x.loadType==='bodyweight'?'weight':'bodyweight'}:x)})}><span>Собственный вес</span><i>✓</i></button><button className="settings-delete" aria-label={'Удалить '+ex.name+' из шаблона'} onPointerDown={e=>e.stopPropagation()} onClick={()=>remove(ex.id)}>−</button></div>)}</div><div className="settings-tip">Нажми и удерживай строку, затем перетащи её в нужное место.</div></div>
+  <div className="card">
+   <div className="settings-section-title">УПРАЖНЕНИЯ</div>
+   <div className="segmented">{data.workoutTypes.map(t=><button key={t.id} className={target===t.id?'active':''} onClick={()=>switchTemplate(t.id)}>{t.name}</button>)}</div>
+   <div className="settings-list">
+    {draftExercises.map(ex=><div className={'settings-item '+(draggingId===ex.id?'is-dragging':'')} data-id={ex.id} key={ex.id} onPointerDown={e=>startDrag(ex.id,e)} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}>
+      <span className="settings-drag-hint" aria-hidden="true">≡</span>
+      <span className="settings-name">{ex.name}</span>
+      <div className="load-type-segmented" onPointerDown={e=>e.stopPropagation()}>
+        <button type="button" className={ex.loadType!=='bodyweight'?'active':''} onClick={()=>setLoadType(ex.id,'weight')}>С весом</button>
+        <button type="button" className={ex.loadType==='bodyweight'?'active':''} onClick={()=>setLoadType(ex.id,'bodyweight')}>Без веса</button>
+      </div>
+      <button className="settings-delete" aria-label={'Удалить '+ex.name+' из шаблона'} onPointerDown={e=>e.stopPropagation()} onClick={()=>remove(ex.id)}>−</button>
+    </div>)}
+   </div>
+   <div className="settings-tip">«Без веса» — в тренировке записываются только подходы и повторения. Режим можно изменить и внутри конкретной тренировки.</div>
+   <div className="settings-save-row"><div>{savedFlash?<span className="settings-saved">Сохранено</span>:dirty?<span className="settings-unsaved">Есть несохранённые изменения</span>:<span className="settings-saved">Все изменения сохранены</span>}</div><button className="primary settings-save-button" disabled={!dirty} onClick={()=>void saveTemplate()}>Сохранить</button></div>
+  </div>
   <div className="card"><div className="exercise-name">Добавить упражнение</div><div className="form-grid" style={{marginTop:10}}><input className="input" value={addName} onChange={e=>setAddName(e.target.value)} placeholder="Название упражнения"/><button className="primary" onClick={add}>Добавить в шаблон</button></div><div className="muted" style={{fontSize:12,marginTop:8}}>Разовое добавление во время тренировки остаётся доступно отдельно.</div></div>
  </div>
 }
