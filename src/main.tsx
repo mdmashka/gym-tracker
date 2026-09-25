@@ -94,6 +94,8 @@ function formatDraftTime(value:string){const d=new Date(value),n=new Date();retu
 function Onboarding({data,onComplete}:{data:AppData;onComplete:(next:AppData)=>void}){
  const [step,setStep]=useState(1);
  const [selected,setSelected]=useState<string[]>(['fullbody']);
+ const [customTemplates,setCustomTemplates]=useState<Array<{id:string;name:string;slug:string;exercises:string[]}>>([]);
+ const [templateName,setTemplateName]=useState('');
  const [current,setCurrent]=useState(0);
  const [chosen,setChosen]=useState<Record<string,string[]>>({});
  const [custom,setCustom]=useState('');
@@ -102,11 +104,25 @@ function Onboarding({data,onComplete}:{data:AppData;onComplete:(next:AppData)=>v
  const [theme,setTheme]=useState<'light'|'dark'>(data.settings?.theme ?? 'dark');
  const [accentColor,setAccentColor]=useState(data.settings?.accentColor ?? 'red');
 
- const templates=ONBOARDING_TEMPLATES.filter(t=>selected.includes(t.id));
+ const templates=[...ONBOARDING_TEMPLATES,...customTemplates].filter(t=>selected.includes(t.id));
  const currentTemplate=templates[current];
  const toggleTemplate=(id:string)=>setSelected(v=>v.includes(id)?v.filter(x=>x!==id):[...v,id]);
+ const addTemplate=()=>{
+   const name=templateName.trim();
+   if(!name)return;
+   const exists=[...ONBOARDING_TEMPLATES,...customTemplates].some(t=>t.name.trim().toLowerCase()===name.toLowerCase());
+   if(exists)return;
+   const id='custom-'+uid();
+   setCustomTemplates(v=>[...v,{id,name,slug:name.toLowerCase().replace(/[^a-zа-я0-9]+/gi,'-').replace(/^-|-$/g,''),exercises:[]}]);
+   setSelected(v=>[...v,id]);
+   setTemplateName('');
+ };
+ const removeCustomTemplate=(id:string)=>{
+   setCustomTemplates(v=>v.filter(t=>t.id!==id));
+   setSelected(v=>v.filter(x=>x!==id));
+ };
  const toggleExercise=(name:string)=>currentTemplate&&setChosen(v=>{const a=v[currentTemplate.id]??[];return {...v,[currentTemplate.id]:a.includes(name)?a.filter(x=>x!==name):[...a,name]};});
- const addCustom=()=>{if(!currentTemplate||!custom.trim())return;const name=custom.trim();setChosen(v=>({...v,[currentTemplate.id]:[...(v[currentTemplate.id]??[]),name]}));if(customBodyweight)setCustomBodyweights(v=>({...v,[currentTemplate.id]:[...(v[currentTemplate.id]??[]),name]}));setCustom('');};
+ const addCustom=()=>{if(!currentTemplate||!custom.trim())return;const name=custom.trim();setChosen(v=>({...v,[currentTemplate.id]:[...(v[currentTemplate.id]??[]),name]}));if(customBodyweight)setCustomBodyweights(v=>({...v,[currentTemplate.id]:[...(v[currentTemplate.id]??[]),name]}));setCustom('');setCustomBodyweight(false);};
  const finish=()=>{
    const workoutTypes=templates.map(t=>({id:t.id,name:t.name,slug:t.slug}));
    const exercises:Exercise[]=[];
@@ -114,17 +130,20 @@ function Onboarding({data,onComplete}:{data:AppData;onComplete:(next:AppData)=>v
    onComplete({...data,workoutTypes,exercises,workouts:[],onboardingComplete:true,settings:{restTimerSeconds:data.settings?.restTimerSeconds ?? 120,restTimerEnabled:data.settings?.restTimerEnabled ?? true,theme,accentColor}});
  };
  if(step===1)return <div className="onboarding screen">
-   <div className="onboarding-hero"><div className="onboarding-kicker">GYM TRACKER</div><h1>Настроим тренировки</h1><p>Выберите шаблоны отдельных тренировочных дней. Каждый выбранный пункт станет отдельным шаблоном тренировки.</p></div>
+   <div className="onboarding-hero"><div className="onboarding-kicker">GYM TRACKER</div><h1>Настроим тренировки</h1><p>Выберите готовые шаблоны тренировочных дней или создайте свои. Один шаблон — один отдельный тренировочный день.</p></div>
    <div className="onboarding-options">{ONBOARDING_TEMPLATES.map(t=><button key={t.id} className={'onboarding-group '+(selected.includes(t.id)?'selected':'')} onClick={()=>toggleTemplate(t.id)}><span className="onboarding-template-name">{t.name}</span><i>✓</i></button>)}</div>
-   <div className="onboarding-hint">Например, можно выбрать Fullbody или собрать сплит из нескольких дней. Позже шаблоны можно изменить в настройках.</div>
-   <button className="primary onboarding-next" disabled={!selected.length} onClick={()=>{setChosen(Object.fromEntries(templates.map(t=>[t.id,t.exercises.slice(0,2)])));setStep(2)}}>Далее</button>
+   {customTemplates.length>0&&<div className="onboarding-custom-list">{customTemplates.map(t=><div key={t.id} className={'onboarding-custom-row '+(selected.includes(t.id)?'selected':'')}><button className="onboarding-custom-select" onClick={()=>toggleTemplate(t.id)}><span className="onboarding-template-name">{t.name}</span><i>✓</i></button><button className="onboarding-custom-delete" aria-label={'Удалить шаблон '+t.name} onClick={()=>removeCustomTemplate(t.id)}>×</button></div>)}</div>}
+   <div className="custom-template-box"><div className="settings-section-title">СВОЙ ШАБЛОН</div><div className="form-grid"><input className="input" value={templateName} onChange={e=>setTemplateName(e.target.value)} placeholder="Например, Ноги + ягодицы"/><button className="secondary" disabled={!templateName.trim()} onClick={addTemplate}>Добавить шаблон</button></div></div>
+   <div className="onboarding-hint">Например, «Ноги + ягодицы» можно сделать одним шаблоном вместо двух. Шаблоны и их названия можно изменить позже в настройках.</div>
+   <button className="primary onboarding-next" disabled={!selected.length} onClick={()=>{setCurrent(0);setChosen(Object.fromEntries(templates.map(t=>[t.id,t.exercises.slice(0,2)])));setStep(2)}}>Далее</button>
  </div>;
  if(step===2&&!currentTemplate)return null;
  if(step===2)return <div className="onboarding screen">
    <div className="onboarding-progress"><span>ШАГ 2 · УПРАЖНЕНИЯ</span><b>{current+1} / {templates.length}</b></div>
    <div className="onboarding-hero"><div className="onboarding-kicker">{currentTemplate.name}</div><h1>Соберите шаблон</h1><p>Выберите упражнения, которые хотите видеть в этом тренировочном дне.</p></div>
-   <div className="onboarding-options">{currentTemplate.exercises.map(name=><button key={name} className={'onboarding-exercise '+((chosen[currentTemplate.id]??[]).includes(name)?'selected':'')} onClick={()=>toggleExercise(name)}><span>{name}</span><i>✓</i></button>)}</div>
+   {currentTemplate.exercises.length>0&&<div className="onboarding-options">{currentTemplate.exercises.map(name=><button key={name} className={'onboarding-exercise '+((chosen[currentTemplate.id]??[]).includes(name)?'selected':'')} onClick={()=>toggleExercise(name)}><span>{name}</span><i>✓</i></button>)}</div>}
    <div className="custom-exercise-box"><div className="settings-section-title">СВОЁ УПРАЖНЕНИЕ</div><div className="form-grid"><input className="input" value={custom} onChange={e=>setCustom(e.target.value)} placeholder="Название упражнения"/><button className={'bodyweight-toggle onboarding-bodyweight '+(customBodyweight?'on':'')} onClick={()=>setCustomBodyweight(v=>!v)}><span>Собственный вес</span><i>✓</i></button><button className="secondary" onClick={addCustom}>Добавить в шаблон</button></div></div>
+   {(chosen[currentTemplate.id]??[]).length>0&&<div className="onboarding-selected-exercises"><div className="settings-section-title">В ШАБЛОНЕ</div>{(chosen[currentTemplate.id]??[]).map((name,i)=><div className="onboarding-selected-row" key={name+i}><span>{name}</span><button onClick={()=>setChosen(v=>({...v,[currentTemplate.id]:(v[currentTemplate.id]??[]).filter((_,idx)=>idx!==i)}))}>×</button></div>)}</div>}
    <div className="onboarding-hint">Эти упражнения можно изменить позже в настройках.</div>
    <div className="onboarding-actions"><button className="secondary" disabled={current===0} onClick={()=>setCurrent(v=>v-1)}>Назад</button>{current<templates.length-1?<button className="primary" onClick={()=>setCurrent(v=>v+1)}>Следующая тренировка</button>:<button className="primary" onClick={()=>setStep(3)}>Далее</button>}</div>
  </div>;
