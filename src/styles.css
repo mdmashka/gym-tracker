@@ -677,3 +677,7 @@ html[data-app-theme="dark"] #root { background:#000!important; color:#f5f5f7!imp
   background:color-mix(in srgb,var(--app-text) 7%,var(--app-card))
 }
 .app .review-grid strong{display:block;font-size:19px;color:var(--app-text);margin-bottom:3px}
+
+
+.app .history-actions{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media(max-width:520px){.app .history-actions{grid-template-columns:repeat(2,minmax(0,1fr))}}
