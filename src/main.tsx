@@ -80,26 +80,65 @@ function App(){
 }
 
 
-const ONBOARDING_GROUPS = [
- {id:'legs',name:'Ноги',icon:'🦵',exercises:['Жим ногами','Разгибание ног','Сгибание ног','Икры']},
- {id:'glutes',name:'Ягодицы',icon:'🍑',exercises:['Ягодичный мост','Отведение ноги назад','Болгарские приседания','Румынская тяга']},
- {id:'back',name:'Спина',icon:'🦅',exercises:['Тяга верхнего блока','Тяга нижнего блока','Тяга сидя','Подтягивания']},
- {id:'chest',name:'Грудь',icon:'🏋️',exercises:['Жим лёжа','Жим гантелей','Разведение гантелей','Сведение рук']},
- {id:'shoulders',name:'Плечи',icon:'◼️',exercises:['Жим гантелей сидя','Разведение в стороны','Задняя дельта','Тяга к подбородку']},
- {id:'arms',name:'Руки',icon:'💪',exercises:['Подъём на бицепс','Молотки','Разгибание на трицепс','Трицепс на блоке']},
- {id:'abs',name:'Пресс',icon:'◉',exercises:['Скручивания','Подъём ног','Планка']}
+const ONBOARDING_TEMPLATES = [
+ {id:'fullbody',name:'Fullbody',slug:'fullbody',exercises:['Жим ногами','Тяга верхнего блока','Жим лёжа','Жим гантелей сидя','Румынская тяга','Подъём на бицепс','Трицепс на блоке','Скручивания']},
+ {id:'legs',name:'Ноги',slug:'legs',exercises:['Жим ногами','Разгибание ног','Сгибание ног','Икры','Болгарские приседания']},
+ {id:'glutes',name:'Ягодицы',slug:'glutes',exercises:['Ягодичный мост','Отведение ноги назад','Болгарские приседания','Румынская тяга','Гиперэкстензия']},
+ {id:'back',name:'Спина',slug:'back',exercises:['Тяга верхнего блока','Тяга нижнего блока','Тяга сидя','Подтягивания','Тяга гантели в наклоне']},
+ {id:'chest',name:'Грудь',slug:'chest',exercises:['Жим лёжа','Жим гантелей','Разведение гантелей','Сведение рук','Отжимания']},
+ {id:'shoulders',name:'Плечи',slug:'shoulders',exercises:['Жим гантелей сидя','Разведение в стороны','Задняя дельта','Тяга к подбородку']},
+ {id:'arms',name:'Руки',slug:'arms',exercises:['Подъём на бицепс','Молотки','Разгибание на трицепс','Трицепс на блоке']}
 ] as const;
+
 function formatDraftTime(value:string){const d=new Date(value),n=new Date();return d.toDateString()===n.toDateString()?d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}):d.toLocaleDateString('ru-RU',{day:'numeric',month:'short'})+' · '+d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});}
 function Onboarding({data,onComplete}:{data:AppData;onComplete:(next:AppData)=>void}){
- const [step,setStep]=useState(1);const [selected,setSelected]=useState<string[]>(['legs','back']);const [current,setCurrent]=useState(0);const [chosen,setChosen]=useState<Record<string,string[]>>({});const [custom,setCustom]=useState('');const [customBodyweight,setCustomBodyweight]=useState(false);const [customBodyweights,setCustomBodyweights]=useState<Record<string,string[]>>({});
- const groups=ONBOARDING_GROUPS.filter(g=>selected.includes(g.id));const currentGroup=groups[current];
- const toggleGroup=(id:string)=>setSelected(v=>v.includes(id)?v.filter(x=>x!==id):[...v,id]);
- const toggleExercise=(name:string)=>currentGroup&&setChosen(v=>{const a=v[currentGroup.id]??[];return {...v,[currentGroup.id]:a.includes(name)?a.filter(x=>x!==name):[...a,name]};});
- const addCustom=()=>{if(!currentGroup||!custom.trim())return;const name=custom.trim();setChosen(v=>({...v,[currentGroup.id]:[...(v[currentGroup.id]??[]),name]}));if(customBodyweight)setCustomBodyweights(v=>({...v,[currentGroup.id]:[...(v[currentGroup.id]??[]),name]}));setCustom('');};
- const finish=()=>{const workoutTypes=groups.map(g=>({id:g.id,name:g.name,slug:g.id}));const exercises:Exercise[]=[];groups.forEach(g=>(chosen[g.id]??[]).forEach((name,i)=>exercises.push({id:uid(),workoutTypeId:g.id,name,loadType:(customBodyweights[g.id]??[]).includes(name)?'bodyweight':'weight',sortOrder:i+1,isActive:true})));onComplete({...data,workoutTypes,exercises,workouts:[],onboardingComplete:true});};
- if(step===1)return <div className="onboarding screen"><div className="onboarding-hero"><div className="onboarding-kicker">GYM TRACKER</div><h1>Настроим тренировки</h1><p>Выберите группы мышц, которые вы тренируете.</p></div><div className="onboarding-options">{ONBOARDING_GROUPS.map(g=><button key={g.id} className={'onboarding-group '+(selected.includes(g.id)?'selected':'')} onClick={()=>toggleGroup(g.id)}><span className="onboarding-icon">{g.icon}</span><span>{g.name}</span><i>✓</i></button>)}</div><button className="primary onboarding-next" disabled={!selected.length} onClick={()=>{setChosen(Object.fromEntries(groups.map(g=>[g.id,g.exercises.slice(0,2)])));setStep(2)}}>Далее</button></div>;
- if(!currentGroup)return null;
- return <div className="onboarding screen"><div className="onboarding-progress"><span>ШАГ 2</span><b>{current+1} / {groups.length}</b></div><div className="onboarding-hero"><div className="onboarding-kicker">{currentGroup.icon} {currentGroup.name}</div><h1>Соберите шаблон</h1><p>Выберите готовые упражнения или добавьте своё.</p></div><div className="onboarding-options">{currentGroup.exercises.map(name=><button key={name} className={'onboarding-exercise '+((chosen[currentGroup.id]??[]).includes(name)?'selected':'')} onClick={()=>toggleExercise(name)}><span>{name}</span><i>✓</i></button>)}</div><div className="custom-exercise-box"><div className="settings-section-title">СВОЁ УПРАЖНЕНИЕ</div><div className="form-grid"><input className="input" value={custom} onChange={e=>setCustom(e.target.value)} placeholder="Название упражнения"/><button className={'bodyweight-toggle onboarding-bodyweight '+(customBodyweight?'on':'')} onClick={()=>setCustomBodyweight(v=>!v)}><span>Собственный вес</span><i>✓</i></button><button className="secondary" onClick={addCustom}>Добавить в шаблон</button></div></div><div className="onboarding-actions"><button className="secondary" disabled={current===0} onClick={()=>setCurrent(v=>v-1)}>Назад</button>{current<groups.length-1?<button className="primary" onClick={()=>setCurrent(v=>v+1)}>Следующая группа</button>:<button className="primary" onClick={finish}>Готово</button>}</div></div>;
+ const [step,setStep]=useState(1);
+ const [selected,setSelected]=useState<string[]>(['fullbody']);
+ const [current,setCurrent]=useState(0);
+ const [chosen,setChosen]=useState<Record<string,string[]>>({});
+ const [custom,setCustom]=useState('');
+ const [customBodyweight,setCustomBodyweight]=useState(false);
+ const [customBodyweights,setCustomBodyweights]=useState<Record<string,string[]>>({});
+ const [theme,setTheme]=useState<'light'|'dark'>(data.settings?.theme ?? 'dark');
+ const [accentColor,setAccentColor]=useState(data.settings?.accentColor ?? 'red');
+
+ const templates=ONBOARDING_TEMPLATES.filter(t=>selected.includes(t.id));
+ const currentTemplate=templates[current];
+ const toggleTemplate=(id:string)=>setSelected(v=>v.includes(id)?v.filter(x=>x!==id):[...v,id]);
+ const toggleExercise=(name:string)=>currentTemplate&&setChosen(v=>{const a=v[currentTemplate.id]??[];return {...v,[currentTemplate.id]:a.includes(name)?a.filter(x=>x!==name):[...a,name]};});
+ const addCustom=()=>{if(!currentTemplate||!custom.trim())return;const name=custom.trim();setChosen(v=>({...v,[currentTemplate.id]:[...(v[currentTemplate.id]??[]),name]}));if(customBodyweight)setCustomBodyweights(v=>({...v,[currentTemplate.id]:[...(v[currentTemplate.id]??[]),name]}));setCustom('');};
+ const finish=()=>{
+   const workoutTypes=templates.map(t=>({id:t.id,name:t.name,slug:t.slug}));
+   const exercises:Exercise[]=[];
+   templates.forEach(t=>(chosen[t.id]??[]).forEach((name,i)=>exercises.push({id:uid(),workoutTypeId:t.id,name,loadType:(customBodyweights[t.id]??[]).includes(name)?'bodyweight':'weight',sortOrder:i+1,isActive:true})));
+   onComplete({...data,workoutTypes,exercises,workouts:[],onboardingComplete:true,settings:{restTimerSeconds:data.settings?.restTimerSeconds ?? 120,restTimerEnabled:data.settings?.restTimerEnabled ?? true,theme,accentColor}});
+ };
+ if(step===1)return <div className="onboarding screen">
+   <div className="onboarding-hero"><div className="onboarding-kicker">GYM TRACKER</div><h1>Настроим тренировки</h1><p>Выберите шаблоны отдельных тренировочных дней. Каждый выбранный пункт станет отдельным шаблоном тренировки.</p></div>
+   <div className="onboarding-options">{ONBOARDING_TEMPLATES.map(t=><button key={t.id} className={'onboarding-group '+(selected.includes(t.id)?'selected':'')} onClick={()=>toggleTemplate(t.id)}><span className="onboarding-template-name">{t.name}</span><i>✓</i></button>)}</div>
+   <div className="onboarding-hint">Например, можно выбрать Fullbody или собрать сплит из нескольких дней. Позже шаблоны можно изменить в настройках.</div>
+   <button className="primary onboarding-next" disabled={!selected.length} onClick={()=>{setChosen(Object.fromEntries(templates.map(t=>[t.id,t.exercises.slice(0,2)])));setStep(2)}}>Далее</button>
+ </div>;
+ if(step===2&&!currentTemplate)return null;
+ if(step===2)return <div className="onboarding screen">
+   <div className="onboarding-progress"><span>ШАГ 2 · УПРАЖНЕНИЯ</span><b>{current+1} / {templates.length}</b></div>
+   <div className="onboarding-hero"><div className="onboarding-kicker">{currentTemplate.name}</div><h1>Соберите шаблон</h1><p>Выберите упражнения, которые хотите видеть в этом тренировочном дне.</p></div>
+   <div className="onboarding-options">{currentTemplate.exercises.map(name=><button key={name} className={'onboarding-exercise '+((chosen[currentTemplate.id]??[]).includes(name)?'selected':'')} onClick={()=>toggleExercise(name)}><span>{name}</span><i>✓</i></button>)}</div>
+   <div className="custom-exercise-box"><div className="settings-section-title">СВОЁ УПРАЖНЕНИЕ</div><div className="form-grid"><input className="input" value={custom} onChange={e=>setCustom(e.target.value)} placeholder="Название упражнения"/><button className={'bodyweight-toggle onboarding-bodyweight '+(customBodyweight?'on':'')} onClick={()=>setCustomBodyweight(v=>!v)}><span>Собственный вес</span><i>✓</i></button><button className="secondary" onClick={addCustom}>Добавить в шаблон</button></div></div>
+   <div className="onboarding-hint">Эти упражнения можно изменить позже в настройках.</div>
+   <div className="onboarding-actions"><button className="secondary" disabled={current===0} onClick={()=>setCurrent(v=>v-1)}>Назад</button>{current<templates.length-1?<button className="primary" onClick={()=>setCurrent(v=>v+1)}>Следующая тренировка</button>:<button className="primary" onClick={()=>setStep(3)}>Далее</button>}</div>
+ </div>;
+ const accentOptions=[['red','Красный','#ff375f'],['pink','Розовый','#ff2d55'],['purple','Фиолетовый','#af52de'],['blue','Синий','#0a84ff'],['teal','Бирюзовый','#14b8a6'],['green','Зелёный','#30d158'],['orange','Оранжевый','#ff9f0a']] as const;
+ return <div className="onboarding screen">
+   <div className="onboarding-progress"><span>ШАГ 3 · ОФОРМЛЕНИЕ</span><b>Готово</b></div>
+   <div className="onboarding-hero"><div className="onboarding-kicker">ОФОРМЛЕНИЕ</div><h1>Настройте приложение</h1><p>Выберите тему и акцентный цвет.</p></div>
+   <div className="onboarding-settings-card">
+     <div className="onboarding-setting-row"><div><strong>Тема</strong><span>Светлая или тёмная</span></div><div className="segmented compact"><button className={theme==='light'?'active':''} onClick={()=>setTheme('light')}>Белая</button><button className={theme==='dark'?'active':''} onClick={()=>setTheme('dark')}>Чёрная</button></div></div>
+     <div className="onboarding-setting-block"><strong>Акцентный цвет</strong><div className="accent-options">{accentOptions.map(([id,name,color])=><button key={id} title={name} aria-label={name} className={'accent-swatch '+(accentColor===id?'selected':'')} style={{'--swatch':color} as React.CSSProperties} onClick={()=>setAccentColor(id)}><span/></button>)}</div></div>
+   </div>
+   <div className="onboarding-hint">Тему и акцентный цвет можно изменить позже в настройках.</div>
+   <div className="onboarding-actions"><button className="secondary" onClick={()=>setStep(2)}>Назад</button><button className="primary" onClick={finish}>Начать</button></div>
+ </div>;
 }
 function Top({title,sub,action}:{title:string;sub?:string;action?:React.ReactNode}){ return <div className="topbar"><div><div className="eyebrow">GYM LOG</div><h1>{title}</h1>{sub&&<div className="muted" style={{marginTop:5}}>{sub}</div>}</div>{action}</div> }
 
