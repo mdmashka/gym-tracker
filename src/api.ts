@@ -62,20 +62,31 @@ export async function ensureMenuButton(): Promise<void> {
 }
 
 export async function saveRemoteData(data: AppData): Promise<AppData> {
-  // Always persist locally first. This also makes drafts survive a reload.
+  // Always persist locally first. Remote sync must never be allowed to lose a workout.
   saveData(data);
-
   if (!hasTelegramSession()) return data;
 
-  const res = await fetch(`${API_URL}`, {
-    method: 'PUT',
-    headers: { ...headers(), 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await fetch(`${API_URL}`, {
+        method: 'PUT',
+        headers: { ...headers(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (res.ok) return await res.json() as AppData;
 
-  // Do not write the response back to localStorage: several quick saves can
-  // complete out of order, and an older response must never overwrite newer
-  // local data.
-  return await res.json() as AppData;
+      const message = await res.text();
+      // Retry transient server/rate-limit failures; authentication/validation
+      // errors should surface immediately instead of hammering the API.
+      if (res.status !== 429 && res.status < 500) {
+        throw new Error(`API ${res.status}: ${message}`);
+      }
+      throw new Error(`API ${res.status}: ${message}`);
+    } catch (error) {
+      lastError = error;
+      if (attempt < 2) await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
