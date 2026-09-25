@@ -361,3 +361,63 @@ body{color:#f5f5f7!important}
   .activity-weekdays,.activity-grid{gap:5px}
   .activity-grid span{font-size:12px}
 }
+
+/* App-owned appearance: never inherit Telegram light/dark or Telegram accent */
+html[data-app-theme="dark"],html[data-app-theme="dark"] body{background:#000!important;color:#f5f5f7!important}
+html[data-app-theme="light"],html[data-app-theme="light"] body{background:#f2f2f7!important;color:#111!important}
+.app{--app-bg:#f2f2f7;--app-card:#fff;--app-text:#111;--app-muted:#8e8e93;--app-border:rgba(60,60,67,.16);--app-accent:#ff375f;--app-accent-soft:rgba(255,55,95,.10);background:var(--app-bg)!important;color:var(--app-text)!important}
+.app.theme-dark{--app-bg:#000;--app-card:#2c2c2e;--app-text:#f5f5f7;--app-muted:#a1a1a6;--app-border:#48484a;--app-accent:#ff375f;--app-accent-soft:rgba(255,55,95,.14)}
+.app.theme-light{--app-bg:#f2f2f7;--app-card:#fff;--app-text:#111;--app-muted:#8e8e93;--app-border:rgba(60,60,67,.16)}
+.app.accent-red{--app-accent:#ff375f;--app-accent-soft:rgba(255,55,95,.12)}
+.app.accent-pink{--app-accent:#ff2d55;--app-accent-soft:rgba(255,45,85,.12)}
+.app.accent-purple{--app-accent:#af52de;--app-accent-soft:rgba(175,82,222,.12)}
+.app.accent-blue{--app-accent:#0a84ff;--app-accent-soft:rgba(10,132,255,.12)}
+.app.accent-teal{--app-accent:#14b8a6;--app-accent-soft:rgba(20,184,166,.12)}
+.app.accent-green{--app-accent:#30d158;--app-accent-soft:rgba(48,209,88,.12)}
+.app.accent-orange{--app-accent:#ff9f0a;--app-accent-soft:rgba(255,159,10,.12)}
+.app.theme-light .card,.app.theme-light .week-card,.app.theme-light .last-workout-card,.app.theme-light .activity-card{background:var(--app-card);border-color:var(--app-border);color:var(--app-text)}
+.app.theme-light .home-section h2,.app.theme-light .home-hero h1{color:var(--app-text)}
+.app.theme-light .home-eyebrow,.app.theme-light .home-date,.app.theme-light .week-stat span,.app.theme-light .last-workout-info span,.app.theme-light .activity-count,.app.theme-light .activity-weekdays span,.app.theme-light .home-tools small{color:var(--app-muted)}
+.app.theme-light .week-card{padding:24px}
+.app.theme-light .week-stat{border-color:var(--app-border)}
+.app.theme-light .week-stat strong{color:var(--app-text)}
+.app.theme-light .home-tools,.app.theme-light .home-tools button{background:#fff;border-color:var(--app-border);color:var(--app-text)}
+.app.theme-light .home-tools button:active{background:#f2f2f7}
+.app.theme-light .activity-card{background:#fff}
+.app.theme-light .activity-grid span{color:#636366}
+.app.theme-light .start-modal,.app.theme-light .modal{background:#fff;color:#111;border-color:var(--app-border)}
+.app.theme-light .start-option{background:#f2f2f7;color:#111}
+.app.theme-light .input{background:#f2f2f7;color:#111;border-color:transparent}
+.app.theme-light .icon-btn{background:#f2f2f7;color:#111}
+.app.theme-light .timer-fab{background:rgba(255,255,255,.94);color:#111;border-color:var(--app-border)}
+.app.theme-light .timer-btn{background:#f2f2f7;color:#111}
+.app .primary{background:linear-gradient(135deg,var(--app-accent),color-mix(in srgb,var(--app-accent) 72%,white));}
+.app .secondary{background:var(--app-accent-soft);color:var(--app-accent)}
+.app .home-start{box-shadow:0 14px 32px color-mix(in srgb,var(--app-accent) 22%,transparent)}
+.app .last-workout-icon,.app .tool .app-icon{color:var(--app-accent);background:var(--app-accent-soft)}
+.app .accent-swatch{--swatch:#ff375f}
+.accent-picker{padding:15px 2px 4px;border-top:1px solid var(--app-border);margin-top:4px}
+.accent-picker-title{font-size:14px;font-weight:650;color:var(--app-text);margin-bottom:13px}
+.accent-options{display:flex;gap:14px;flex-wrap:wrap}
+.accent-swatch{width:34px;height:34px;padding:4px;border-radius:50%;background:transparent;cursor:pointer}
+.accent-swatch span{display:block;width:26px;height:26px;border-radius:50%;background:var(--swatch)}
+.accent-swatch.selected{box-shadow:0 0 0 2px var(--app-bg),0 0 0 4px var(--swatch)}
+.segmented.compact{width:190px;max-width:52%;flex:0 0 auto}
+.ios-switch{position:relative;width:51px;height:31px;flex:0 0 51px;border-radius:16px;background:#78788066;padding:0;cursor:pointer}
+.ios-switch span{position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 2px 5px rgba(0,0,0,.25);transition:.18s}
+.ios-switch.on{background:var(--app-accent)}
+.ios-switch.on span{transform:translateX(20px)}
+.timer-select{width:105px!important}
+.history-actions{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.history-actions button{min-width:0;padding-left:8px;padding-right:8px}
+.danger-outline{color:#ff3b30!important;background:rgba(255,59,48,.10)!important}
+.week-card-single{display:block;padding:28px}
+.week-card-single .week-stat{width:100%;min-height:150px}
+.week-card-single .week-stat strong{font-size:62px}
+@media(max-width:520px){
+ .segmented.compact{width:170px}
+ .accent-options{gap:12px}
+ .history-actions button{font-size:13px}
+ .week-card-single{padding:16px}
+ .week-card-single .week-stat{min-height:130px}
+}
