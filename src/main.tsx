@@ -108,7 +108,7 @@ function Onboarding({data,onComplete}:{data:AppData;onComplete:(next:AppData)=>v
    const root=document.documentElement;
    const app=document.querySelector('.app');
    if(app){
-     app.classList.remove('theme-light','theme-dark','accent-red','accent-pink','accent-purple','accent-blue','accent-teal','accent-green','accent-orange');
+     app.classList.remove('theme-light','theme-dark','accent-red','accent-purple','accent-blue','accent-teal','accent-green','accent-orange','accent-yellow');
      app.classList.add('theme-'+theme,'accent-'+accentColor);
    }
    root.dataset.appTheme=theme;
