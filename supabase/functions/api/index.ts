@@ -233,7 +233,7 @@ Deno.serve(async (req) => {
       }
 
       if (body.action === 'ensure_menu_button') {
-        const appUrl = Deno.env.get('MINI_APP_URL') ?? 'https://gym-tracker-vercel-drop.vercel.app';
+        const appUrl = typeof body.url === 'string' && body.url.startsWith('https://') ? body.url : (Deno.env.get('MINI_APP_URL') ?? 'https://gym-tracker-vercel-drop.vercel.app');
         const telegramRes = await fetch(`https://api.telegram.org/bot${botToken}/setChatMenuButton`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
