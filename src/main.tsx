@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import * as XLSX from 'xlsx';
 import type { AppData, Exercise, Screen, SetEntry, Workout, WorkoutExercise, WorkoutTypeId } from './types';
-import { getAppData, isRemoteConfigured, saveRemoteData, notifyTimerExpired, ensureMenuButton } from './api';
+import { getAppData, isRemoteConfigured, saveRemoteData, notifyTimerExpired, ensureMenuButton, deleteRemoteWorkout } from './api';
 import { formatDate, formatLongDate, formatReps, formatWeight, getExercisesForType, latestTwoExecutions, lastExecution, startWorkout, todayISO, uid, workoutTypeName, csvEscape, buildExportRows, ensureWorkoutExercises, downloadText } from './utils';
 import { getTelegram, haptic, initTelegram } from './telegram';
 import './styles.css';
@@ -68,7 +68,7 @@ function App(){
   onEdit={()=>setScreen({kind:'workout',typeId:w.typeId,workoutId:w.id,mode:'edit'})}
   onDuplicate={()=>{const copy:Workout={...w,id:uid(),date:todayISO(),status:'draft',createdAt:new Date().toISOString(),completedAt:undefined,name:w.name,exercises:w.exercises.map(we=>({...we,id:uid(),sets:we.sets.map(s=>({...s,id:uid()}))}))};commit({...data,workouts:[...data.workouts,copy]}).then(()=>setScreen({kind:'workout',typeId:copy.typeId,workoutId:copy.id}));}}
   onRepeat={()=>{const copy:Workout={...w,id:uid(),date:todayISO(),status:'draft',createdAt:new Date().toISOString(),completedAt:undefined,name:w.name,exercises:w.exercises.map(we=>({...we,id:uid(),sets:[],notes:undefined}))};commit({...data,workouts:[...data.workouts,copy]}).then(()=>setScreen({kind:'workout',typeId:copy.typeId,workoutId:copy.id}));}}
-  onDelete={()=>{commit({...data,workouts:data.workouts.filter(x=>x.id!==w.id)}).then(()=>setScreen({kind:'home'}));}}/>:<NotFound/>; }
+  onDelete={async()=>{const next={...data,workouts:data.workouts.filter(x=>x.id!==w.id)};await deleteRemoteWorkout(w.id);await commit(next);setScreen({kind:'home'});}}/>:<NotFound/>; }
   if(screen.kind==='summary') body=<SummaryScreen data={data}/>;
   if(screen.kind==='settings') body=<SettingsScreen data={data} onChange={commit}/>;
   const appSettings=data.settings ?? {restTimerSeconds:120,restTimerEnabled:true,theme:'dark',accentColor:'red'};
