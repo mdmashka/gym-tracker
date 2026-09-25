@@ -232,6 +232,19 @@ Deno.serve(async (req) => {
         return json({ ok: true });
       }
 
+      if (body.action === 'delete_workout') {
+        const workoutId = typeof (body as { workoutId?: unknown }).workoutId === 'string'
+          ? (body as { workoutId: string }).workoutId
+          : '';
+        if (!workoutId) return json({ error: 'workoutId is required' }, 400);
+        const { error } = await db.from('deleted_workouts').upsert({
+          telegram_user_id: telegramUser.id,
+          workout_id: workoutId,
+        }, { onConflict: 'telegram_user_id,workout_id' });
+        if (error) throw error;
+        return json({ ok: true });
+      }
+
       if (body.action === 'ensure_menu_button') {
         const appUrl = typeof body.url === 'string' && body.url.startsWith('https://') ? body.url : (Deno.env.get('MINI_APP_URL') ?? 'https://gym-tracker-vercel-drop.vercel.app');
         const telegramRes = await fetch(`https://api.telegram.org/bot${botToken}/setChatMenuButton`, {
@@ -256,7 +269,21 @@ Deno.serve(async (req) => {
 
       if (error) throw error;
 
-      if (row?.data) return json(row.data);
+      if (row?.data) {
+        const { data: deletedRows, error: deletedError } = await db
+          .from('deleted_workouts')
+          .select('workout_id')
+          .eq('telegram_user_id', telegramUser.id);
+        if (deletedError) throw deletedError;
+        const deletedIds = new Set((deletedRows ?? []).map((r: { workout_id: string }) => r.workout_id));
+        const filtered = {
+          ...row.data,
+          workouts: Array.isArray(row.data.workouts)
+            ? row.data.workouts.filter((w: { id?: string }) => !w?.id || !deletedIds.has(w.id))
+            : row.data.workouts,
+        };
+        return json(filtered);
+      }
 
       const initial = buildDefaultData();
       const { error: insertError } = await db.from('user_app_data').insert({
@@ -279,6 +306,17 @@ Deno.serve(async (req) => {
       if (!isValidAppData(body)) {
         return json({ error: 'Invalid AppData payload' }, 400);
       }
+
+      const { data: deletedRows, error: deletedError } = await db
+        .from('deleted_workouts')
+        .select('workout_id')
+        .eq('telegram_user_id', telegramUser.id);
+      if (deletedError) throw deletedError;
+      const deletedIds = new Set((deletedRows ?? []).map((r: { workout_id: string }) => r.workout_id));
+      const cleanedBody = {
+        ...body,
+        workouts: body.workouts.filter((w: { id?: string }) => !w?.id || !deletedIds.has(w.id)),
+      };
 
       const { data, error } = await db
         .from('user_app_data')
