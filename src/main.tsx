@@ -164,7 +164,7 @@ function Onboarding({data,onComplete}:{data:AppData;onComplete:(next:AppData)=>v
    <div className="onboarding-hint">Эти упражнения можно изменить позже в настройках.</div>
    <div className="onboarding-actions"><button className="secondary" disabled={current===0} onClick={()=>setCurrent(v=>v-1)}>Назад</button>{current<templates.length-1?<button className="primary" onClick={()=>setCurrent(v=>v+1)}>Следующая тренировка</button>:<button className="primary" onClick={()=>setStep(3)}>Далее</button>}</div>
  </div>;
- const accentOptions=[['red','Красный','#ff375f'],['pink','Розовый','#ff2d55'],['purple','Фиолетовый','#af52de'],['blue','Синий','#0a84ff'],['teal','Бирюзовый','#14b8a6'],['green','Зелёный','#30d158'],['orange','Оранжевый','#ff9f0a']] as const;
+ const accentOptions=[['red','Красный','#ff375f'],['purple','Фиолетовый','#af52de'],['blue','Синий','#0a84ff'],['teal','Бирюзовый','#14b8a6'],['green','Зелёный','#30d158'],['orange','Оранжевый','#ff9f0a'],['yellow','Жёлтый','#ffd60a']] as const;
  return <div className="onboarding screen">
    <div className="onboarding-progress"><span>ШАГ 3 · ОФОРМЛЕНИЕ</span><b>Готово</b></div>
    <div className="onboarding-hero"><div className="onboarding-kicker">ОФОРМЛЕНИЕ</div><h1>Настройте приложение</h1><p>Выберите тему и акцентный цвет.</p></div>
