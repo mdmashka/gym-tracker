@@ -54,7 +54,7 @@ export function latestTwoExecutions(data: AppData, typeId: WorkoutTypeId, exerci
 }
 export function startWorkout(data: AppData, typeId: WorkoutTypeId): Workout {
   const exercises = getExercisesForType(data,typeId).map((e,idx)=>({
-    id: uid(), exerciseId:e.id, order:idx+1, skipped:false, sets:[]
+    id: uid(), exerciseId:e.id, order:idx+1, skipped:false, loadType:e.loadType==='bodyweight'?'bodyweight':'weight', sets:[]
   }));
   const now = new Date().toISOString();
   return { id: uid(), typeId, date:todayISO(), status:'draft', createdAt:now, updatedAt:now, exercises };
@@ -62,7 +62,7 @@ export function startWorkout(data: AppData, typeId: WorkoutTypeId): Workout {
 export function ensureWorkoutExercises(workout: Workout, data: AppData): Workout {
   const known = new Set(workout.exercises.map(e=>e.exerciseId));
   const max = workout.exercises.reduce((m,e)=>Math.max(m,e.order),0);
-  const extras = getExercisesForType(data,workout.typeId).filter(e=>!known.has(e.id)).map((e,i)=>({id:uid(),exerciseId:e.id,order:max+i+1,skipped:false,sets:[]}));
+  const extras = getExercisesForType(data,workout.typeId).filter(e=>!known.has(e.id)).map((e,i)=>({id:uid(),exerciseId:e.id,order:max+i+1,skipped:false,loadType:e.loadType==='bodyweight'?'bodyweight':'weight',sets:[]}));
   return extras.length ? {...workout,exercises:[...workout.exercises,...extras]} : workout;
 }
 export function setSummary(we: WorkoutExercise) {
