@@ -375,7 +375,6 @@ html[data-app-theme="light"],html[data-app-theme="light"] body{background:#f2f2f
 .app.theme-dark{--app-bg:#000;--app-card:#2c2c2e;--app-text:#f5f5f7;--app-muted:#a1a1a6;--app-border:#48484a;--app-accent:#ff375f;--app-accent-soft:rgba(255,55,95,.14)}
 .app.theme-light{--app-bg:#f2f2f7;--app-card:#fff;--app-text:#111;--app-muted:#8e8e93;--app-border:rgba(60,60,67,.16)}
 .app.accent-red{--app-accent:#ff375f;--app-accent-soft:rgba(255,55,95,.12)}
-.app.accent-pink{--app-accent:#ff2d55;--app-accent-soft:rgba(255,45,85,.12)}
 .app.accent-purple{--app-accent:#af52de;--app-accent-soft:rgba(175,82,222,.12)}
 .app.accent-blue{--app-accent:#0a84ff;--app-accent-soft:rgba(10,132,255,.12)}
 .app.accent-teal{--app-accent:#14b8a6;--app-accent-soft:rgba(20,184,166,.12)}
@@ -762,3 +761,4 @@ html[data-app-theme="dark"] #root { background:#000!important; color:#f5f5f7!imp
 .range-day{min-height:42px;border-radius:12px;background:transparent;color:var(--tg-text-color,#111);font-size:14px;font-weight:600}
 .range-day.selected{background:var(--app-accent,#ff375f);color:#fff}
 .range-day.in-range{background:color-mix(in srgb,var(--app-accent,#ff375f) 12%,transparent);color:var(--tg-text-color,#111)}
+.app.accent-yellow{--app-accent:#ffd60a;--app-accent-soft:rgba(255,214,10,.14)}
