@@ -99,8 +99,6 @@ function Onboarding({data,onComplete}:{data:AppData;onComplete:(next:AppData)=>v
  const [current,setCurrent]=useState(0);
  const [chosen,setChosen]=useState<Record<string,string[]>>({});
  const [custom,setCustom]=useState('');
- const [customBodyweight,setCustomBodyweight]=useState(false);
- const [customBodyweights,setCustomBodyweights]=useState<Record<string,string[]>>({});
  const [theme,setTheme]=useState<'light'|'dark'>(data.settings?.theme ?? 'dark');
  const [accentColor,setAccentColor]=useState(data.settings?.accentColor ?? 'red');
 
@@ -139,11 +137,11 @@ function Onboarding({data,onComplete}:{data:AppData;onComplete:(next:AppData)=>v
    setSelected(v=>v.filter(x=>x!==id));
  };
  const toggleExercise=(name:string)=>currentTemplate&&setChosen(v=>{const a=v[currentTemplate.id]??[];return {...v,[currentTemplate.id]:a.includes(name)?a.filter(x=>x!==name):[...a,name]};});
- const addCustom=()=>{if(!currentTemplate||!custom.trim())return;const name=custom.trim();setChosen(v=>({...v,[currentTemplate.id]:[...(v[currentTemplate.id]??[]),name]}));if(customBodyweight)setCustomBodyweights(v=>({...v,[currentTemplate.id]:[...(v[currentTemplate.id]??[]),name]}));setCustom('');setCustomBodyweight(false);};
+ const addCustom=()=>{if(!currentTemplate||!custom.trim())return;const name=custom.trim();setChosen(v=>({...v,[currentTemplate.id]:[...(v[currentTemplate.id]??[]),name]}));setCustom('');};
  const finish=()=>{
    const workoutTypes=templates.map(t=>({id:t.id,name:t.name,slug:t.slug}));
    const exercises:Exercise[]=[];
-   templates.forEach(t=>(chosen[t.id]??[]).forEach((name,i)=>exercises.push({id:uid(),workoutTypeId:t.id,name,loadType:(customBodyweights[t.id]??[]).includes(name)?'bodyweight':'weight',sortOrder:i+1,isActive:true})));
+   templates.forEach(t=>(chosen[t.id]??[]).forEach((name,i)=>exercises.push({id:uid(),workoutTypeId:t.id,name,loadType:'weight',sortOrder:i+1,isActive:true})));
    onComplete({...data,workoutTypes,exercises,workouts:[],onboardingComplete:true,settings:{restTimerSeconds:data.settings?.restTimerSeconds ?? 120,restTimerEnabled:data.settings?.restTimerEnabled ?? true,theme,accentColor}});
  };
  if(step===1)return <div className="onboarding screen">
@@ -159,7 +157,7 @@ function Onboarding({data,onComplete}:{data:AppData;onComplete:(next:AppData)=>v
    <div className="onboarding-progress"><span>ШАГ 2 · УПРАЖНЕНИЯ</span><b>{current+1} / {templates.length}</b></div>
    <div className="onboarding-hero"><div className="onboarding-kicker">{currentTemplate.name}</div><h1>Соберите шаблон</h1><p>Выберите упражнения, которые хотите видеть в этом тренировочном дне.</p></div>
    {currentTemplate.exercises.length>0&&<div className="onboarding-options">{currentTemplate.exercises.map(name=><button key={name} className={'onboarding-exercise '+((chosen[currentTemplate.id]??[]).includes(name)?'selected':'')} onClick={()=>toggleExercise(name)}><span>{name}</span><i>✓</i></button>)}</div>}
-   <div className="custom-exercise-box"><div className="settings-section-title">СВОЁ УПРАЖНЕНИЕ</div><div className="form-grid"><input className="input" value={custom} onChange={e=>setCustom(e.target.value)} placeholder="Название упражнения"/><button className={'bodyweight-toggle onboarding-bodyweight '+(customBodyweight?'on':'')} onClick={()=>setCustomBodyweight(v=>!v)}><span>Собственный вес</span><i>✓</i></button><button className="secondary" onClick={addCustom}>Добавить в шаблон</button></div></div>
+   <div className="custom-exercise-box"><div className="settings-section-title">СВОЁ УПРАЖНЕНИЕ</div><div className="form-grid"><input className="input" value={custom} onChange={e=>setCustom(e.target.value)} placeholder="Название упражнения"/><button className="secondary" onClick={addCustom}>Добавить в шаблон</button></div></div>
    {(chosen[currentTemplate.id]??[]).length>0&&<div className="onboarding-selected-exercises"><div className="settings-section-title">В ШАБЛОНЕ</div>{(chosen[currentTemplate.id]??[]).map((name,i)=><div className="onboarding-selected-row" key={name+i}><span>{name}</span><button onClick={()=>setChosen(v=>({...v,[currentTemplate.id]:(v[currentTemplate.id]??[]).filter((_,idx)=>idx!==i)}))}>×</button></div>)}</div>}
    <div className="onboarding-hint">Эти упражнения можно изменить позже в настройках.</div>
    <div className="onboarding-actions"><button className="secondary" disabled={current===0} onClick={()=>setCurrent(v=>v-1)}>Назад</button>{current<templates.length-1?<button className="primary" onClick={()=>setCurrent(v=>v+1)}>Следующая тренировка</button>:<button className="primary" onClick={()=>setStep(3)}>Далее</button>}</div>
