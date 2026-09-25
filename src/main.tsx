@@ -53,7 +53,10 @@ function App(){
       setScreen({kind:'workout',typeId,workoutId:existing.id});
     } else {
       const w=startWorkout(data,typeId);
-      commit({...data,workouts:[...data.workouts,w]}).then(()=>setScreen({kind:'workout',typeId,workoutId:w.id}));
+      // Открываем тренировку сразу после выбора. Синхронизация идёт в фоне
+      // и не должна блокировать переход в экран заполнения.
+      setScreen({kind:'workout',typeId,workoutId:w.id});
+      commit({...data,workouts:[...data.workouts,w]});
     }
   }} onNav={setScreen}/>;
   if(screen.kind==='workout') {
