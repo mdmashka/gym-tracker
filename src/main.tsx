@@ -41,7 +41,7 @@ function App(){
       .catch(e=>{ setError(`Не удалось синхронизировать: ${String(e)}`); });
     return syncQueue.current;
   };
-  if(loading) return <div className="app"><div className="card">Загрузка…</div></div>;
+  if(loading) return <div className="splash-screen"><div className="splash-title">gym tracker</div><div className="splash-subtitle">мини-приложение</div><div className="splash-loader"><span/><span/><span/></div></div>;
   if(!data) return <div className="app"><div className="card"><h2>Не удалось открыть журнал</h2><p className="muted">{error}</p></div></div>;
 
   let body:React.ReactNode;
@@ -292,14 +292,42 @@ function SummaryScreen({data}:{data:AppData}){
  const stats=active.map(ex=>{const points=completed.flatMap(w=>w.exercises.filter(we=>we.exerciseId===ex.id&&!we.skipped&&we.sets.length).flatMap(we=>we.sets.map(s=>({date:w.date,weight:s.weight,reps:s.reps,bodyweight:ex.loadType==='bodyweight'}))));const weighted=points.filter(p=>!p.bodyweight&&p.weight!=null&&p.reps!=null);const best=weighted.reduce((a,p)=>!a||Number(p.weight)>Number(a.weight)||(Number(p.weight)===Number(a.weight)&&Number(p.reps)>Number(a.reps))?p:a,null as typeof weighted[number]|null);return {ex,points,best};});
  const selected=exercise==='all'?null:stats.find(x=>x.ex.id===exercise);
  const exportData={...data,workouts:completed};
- const exportXlsx=()=>{const rows=buildExportRows(exportData);const ws=XLSX.utils.aoa_to_sheet(rows);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Тренировки');XLSX.writeFile(wb,`gym-log-${todayISO()}.xlsx`);};
- const exportCsv=()=>{const rows=buildExportRows(exportData).map(r=>r.map(csvEscape).join(';')).join('\\n');downloadText(`gym-log-${todayISO()}.csv`,'\\uFEFF'+rows,'text/csv;charset=utf-8');};
+ const exportXlsx=async()=>{try{const rows=buildExportRows(exportData);const ws=XLSX.utils.aoa_to_sheet(rows);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Тренировки');const bytes=XLSX.write(wb,{bookType:'xlsx',type:'array'});await shareOrDownloadFile(new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),'gym-log-'+(from||'all')+'-'+(to||todayISO())+'.xlsx');}catch(e){console.error(e);}};
+ const exportCsv=async()=>{try{const rows=buildExportRows(exportData).map(r=>r.map(csvEscape).join(';')).join('\n');await shareOrDownloadFile(new Blob(['\uFEFF'+rows],{type:'text/csv;charset=utf-8'}),'gym-log-'+(from||'all')+'-'+(to||todayISO())+'.csv');}catch(e){console.error(e);}};
  return <div className="screen"><Top title="Прогресс" sub="История и рост рабочих весов"/>
   <div className="card progress-hero"><div className="progress-kicker">ТРЕНИРОВКИ</div><div className="progress-big">{completed.length}</div><div className="muted">завершённых тренировок</div></div>
   <div className="card"><div className="section-title"><h2>Упражнения</h2></div><select className="input progress-select" value={exercise} onChange={e=>setExercise(e.target.value)}><option value="all">Все упражнения</option>{active.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}</select></div>
   {selected?<ProgressExerciseCard stat={selected}/>:<div className="summary-group">{stats.filter(x=>x.points.length).slice(0,8).map(x=><ProgressExerciseCard key={x.ex.id} stat={x}/>)}</div>}
-  <div className="card"><div className="section-title"><h2>Выгрузка</h2></div><div className="muted export-period">Период выгрузки</div><div className="filter-grid" style={{marginTop:8}}><label className="field-label">От<input className="input" type="date" value={from} onChange={e=>setFrom(e.target.value)}/></label><label className="field-label">До<input className="input" type="date" value={to} onChange={e=>setTo(e.target.value)}/></label></div><div className="tool-row no-print" style={{marginTop:10}}><button className="tool" onClick={exportXlsx}><strong>Excel</strong><small>.xlsx</small></button><button className="tool" onClick={exportCsv}><strong>CSV</strong><small>.csv</small></button><button className="tool" onClick={()=>window.print()}><strong>PDF</strong><small>Печать</small></button></div></div>
+  <div className="card export-card"><div className="section-title"><h2>Выгрузка</h2></div><div className="muted export-period">Период выгрузки</div><DateRangePicker from={from} to={to} onChange={(a,b)=>{setFrom(a);setTo(b)}}/>
+   <div className="tool-row no-print" style={{marginTop:12}}><button className="tool" onClick={exportXlsx}><strong>Excel</strong><small>.xlsx</small></button><button className="tool" onClick={exportCsv}><strong>CSV</strong><small>.csv</small></button><button className="tool" onClick={()=>window.print()}><strong>PDF</strong><small>Печать</small></button></div>
+  </div>
  </div>;
+}
+function DateRangePicker({from,to,onChange}:{from:string;to:string;onChange:(from:string,to:string)=>void}){
+ const [open,setOpen]=useState(false); const [mode,setMode]=useState<'from'|'to'>('from');
+ const initial=from||to||todayISO(); const parsed=new Date(initial+'T12:00:00');
+ const [month,setMonth]=useState(()=>new Date(parsed.getFullYear(),parsed.getMonth(),1));
+ const openPicker=(m:'from'|'to')=>{setMode(m);const value=m==='from'?from:to;const d=value?new Date(value+'T12:00:00'):new Date();setMonth(new Date(d.getFullYear(),d.getMonth(),1));setOpen(true)};
+ const selectDate=(date:string)=>{if(mode==='from'){if(to&&date>to)onChange(date,'');else onChange(date,to);setMode('to');}else{if(from&&date<from){onChange(date,from);setMode('to');}else{onChange(from,date);setOpen(false);}}};
+ const y=month.getFullYear(),m=month.getMonth(),first=new Date(y,m,1),start=(first.getDay()+6)%7,days=new Date(y,m+1,0).getDate();
+ const cells=[];for(let i=0;i<start;i++)cells.push(<div key={'p'+i}/>);
+ for(let d=1;d<=days;d++){const date=y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');const selected=date===from||date===to;const inRange=!!from&&!!to&&date>from&&date<to;cells.push(<button key={date} className={'range-day '+(selected?'selected ':'')+(inRange?'in-range':'')} onClick={()=>selectDate(date)}>{d}</button>)}
+ const label=(v:string,empty:string)=>v?new Date(v+'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short',year:'numeric'}):empty;
+ return <>
+  <div className="date-range-picker"><button className={'date-range-field '+(mode==='from'&&open?'active':'')} onClick={()=>openPicker('from')}><span>От</span><strong>{label(from,'Не выбрано')}</strong></button><div className="date-range-arrow">→</div><button className={'date-range-field '+(mode==='to'&&open?'active':'')} onClick={()=>openPicker('to')}><span>До</span><strong>{label(to,'Не выбрано')}</strong></button></div>
+  {(from||to)&&<button className="date-clear" onClick={()=>onChange('','')}>Сбросить период</button>}
+  {open&&<div className="modal-backdrop" onClick={()=>setOpen(false)}><div className="modal date-picker-modal" onClick={e=>e.stopPropagation()}>
+   <div className="modal-head"><div><h2>{mode==='from'?'Начало периода':'Конец периода'}</h2><div className="muted">Выберите дату</div></div><button className="icon-btn" onClick={()=>setOpen(false)}>×</button></div>
+   <div className="calendar-head"><button className="secondary" onClick={()=>setMonth(new Date(y,m-1,1))}>‹</button><strong>{month.toLocaleDateString('ru-RU',{month:'long',year:'numeric'})}</strong><button className="secondary" onClick={()=>setMonth(new Date(y,m+1,1))}>›</button></div>
+   <div className="month-grid range-calendar">{['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map(x=><div className="cal-day-name" key={x}>{x}</div>)}{cells}</div>
+  </div></div>}
+ </>;
+}
+async function shareOrDownloadFile(blob:Blob,filename:string){
+ const file=new File([blob],filename,{type:blob.type});
+ const nav=navigator as Navigator & {share?: (data?:ShareData)=>Promise<void>;canShare?: (data?:ShareData)=>boolean};
+ if(nav.share&&(!nav.canShare||nav.canShare({files:[file]}))){await nav.share({files:[file],title:filename});return;}
+ const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);
 }
 function ProgressExerciseCard({stat}:{stat:{ex:Exercise;points:Array<{date:string;weight:number|null;reps:number|null;bodyweight?:boolean}>;best:{date:string;weight:number|null;reps:number|null;bodyweight?:boolean}|null}}){
  const recent=stat.points.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,4); const weighted=stat.points.filter(p=>p.weight!=null).slice().sort((a,b)=>a.date.localeCompare(b.date)); const min=weighted.length?Math.min(...weighted.map(p=>Number(p.weight))):0; const max=weighted.length?Math.max(...weighted.map(p=>Number(p.weight))):0;
