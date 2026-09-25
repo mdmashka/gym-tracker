@@ -593,3 +593,71 @@ html[data-app-theme="dark"] #root { background:#000!important; color:#f5f5f7!imp
 .app .cal-dot{background:var(--app-accent)!important}
 .app .settings-section-title,.app .progress-kicker{color:var(--app-muted)!important}
 .app .input:focus{box-shadow:0 0 0 2px color-mix(in srgb,var(--app-accent) 20%,transparent)!important}
+
+
+/* Interactive home activity calendar */
+.app .activity-head{
+  display:grid!important;
+  grid-template-columns:36px 1fr 36px;
+  align-items:center;
+  gap:8px;
+}
+.app .activity-head>span{
+  text-align:center;
+  font-size:20px;
+  font-weight:650;
+  color:var(--app-text)!important;
+}
+.app .activity-nav{
+  width:36px;
+  height:36px;
+  border:0;
+  border-radius:50%;
+  background:var(--app-accent-soft)!important;
+  color:var(--app-accent)!important;
+  font-size:27px;
+  line-height:1;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.app .activity-nav:active{transform:scale(.96)}
+.app .activity-card>.activity-count{
+  text-align:center;
+  margin:-12px 0 20px;
+  font-size:13px;
+  color:var(--app-muted)!important;
+}
+.app .activity-grid .activity-day{
+  appearance:none;
+  -webkit-appearance:none;
+  border:0;
+  padding:0;
+  width:100%;
+  aspect-ratio:1;
+  min-width:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:50%;
+  background:transparent;
+  color:var(--app-text)!important;
+  font-size:14px;
+  font-family:inherit;
+  cursor:pointer;
+}
+.app .activity-grid .activity-day.done{
+  background:var(--app-accent)!important;
+  color:#fff!important;
+  font-weight:750;
+}
+.app .activity-grid .activity-day.current{
+  outline:2px solid var(--app-text)!important;
+  outline-offset:-2px;
+}
+.app .activity-grid .activity-day.done.current{
+  outline-color:color-mix(in srgb,var(--app-accent) 55%,white)!important;
+}
+.app .date-workout-modal .start-option{
+  margin-bottom:8px;
+}
