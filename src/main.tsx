@@ -22,7 +22,7 @@ function App(){
     const handler=()=>workoutBack.current();
     tg.BackButton.onClick(handler); return ()=>tg.BackButton.offClick(handler);
   },[]);
-  useEffect(()=>{if(!data)return;const s=data.settings ?? {restTimerSeconds:120,restTimerEnabled:true,theme:'dark',accentColor:'red'};document.documentElement.dataset.appTheme=s.theme;document.documentElement.dataset.appAccent=s.accentColor;const meta=document.querySelector('meta[name="theme-color"]');if(meta)meta.setAttribute('content',s.theme==='dark'?'#000000':'#f2f2f7');},[data?.settings?.theme,data?.settings?.accentColor]);
+  useEffect(()=>{if(!data)return;const s=data.settings ?? {restTimerSeconds:120,restTimerEnabled:true,theme:'dark',accentColor:'red'};document.documentElement.dataset.appTheme=s.theme;document.documentElement.dataset.appAccent=s.accentColor;document.documentElement.style.setProperty('--tg-bg-color',s.theme==='dark'?'#000':'#f2f2f7');document.documentElement.style.setProperty('--tg-secondary-bg-color',s.theme==='dark'?'#2c2c2e':'#fff');document.documentElement.style.setProperty('--tg-text-color',s.theme==='dark'?'#f5f5f7':'#111');document.documentElement.style.setProperty('--tg-hint-color',s.theme==='dark'?'#a1a1a6':'#8e8e93');const meta=document.querySelector('meta[name="theme-color"]');if(meta)meta.setAttribute('content',s.theme==='dark'?'#000000':'#f2f2f7');},[data?.settings?.theme,data?.settings?.accentColor]);
   useEffect(()=>{
     const tg=getTelegram(); if(!tg) return;
     const show=screen.kind!=='home';
