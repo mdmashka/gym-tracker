@@ -233,7 +233,7 @@ function SettingsScreen({data,onChange}:{data:AppData;onChange:(d:AppData)=>Prom
  const accentOptions=[['red','Красный','#ff375f'],['pink','Розовый','#ff2d55'],['purple','Фиолетовый','#af52de'],['blue','Синий','#0a84ff'],['teal','Бирюзовый','#14b8a6'],['green','Зелёный','#30d158'],['orange','Оранжевый','#ff9f0a']] as const;
  return <div className="screen"><Top title="Настройки" sub="Приложение и шаблоны"/>
   <div className="card settings-group"><div className="settings-section-title">ОФОРМЛЕНИЕ</div>
-   <div className="settings-item"><div><strong>Тема</strong><div className="muted">Не зависит от темы Telegram</div></div><div className="segmented compact"><button className={settings.theme==='light'?'active':''} onClick={()=>updateSettings({theme:'light'})}>Белая</button><button className={settings.theme==='dark'?'active':''} onClick={()=>updateSettings({theme:'dark'})}>Чёрная</button></div></div>
+   <div className="settings-item"><div><strong>Тема</strong></div><div className="segmented compact"><button className={settings.theme==='light'?'active':''} onClick={()=>updateSettings({theme:'light'})}>Белая</button><button className={settings.theme==='dark'?'active':''} onClick={()=>updateSettings({theme:'dark'})}>Чёрная</button></div></div>
    <div className="accent-picker"><div className="accent-picker-title">Акцентный цвет</div><div className="accent-options">{accentOptions.map(([id,name,color])=><button key={id} title={name} aria-label={name} className={`accent-swatch ${settings.accentColor===id?'selected':''}`} style={{'--swatch':color} as React.CSSProperties} onClick={()=>updateSettings({accentColor:id})}><span/></button>)}</div></div>
   </div>
   <div className="card settings-group"><div className="settings-section-title">ТАЙМЕР ОТДЫХА</div>
