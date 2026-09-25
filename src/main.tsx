@@ -104,6 +104,23 @@ function Onboarding({data,onComplete}:{data:AppData;onComplete:(next:AppData)=>v
  const [theme,setTheme]=useState<'light'|'dark'>(data.settings?.theme ?? 'dark');
  const [accentColor,setAccentColor]=useState(data.settings?.accentColor ?? 'red');
 
+ useEffect(()=>{
+   const root=document.documentElement;
+   const app=document.querySelector('.app');
+   if(app){
+     app.classList.remove('theme-light','theme-dark','accent-red','accent-pink','accent-purple','accent-blue','accent-teal','accent-green','accent-orange');
+     app.classList.add('theme-'+theme,'accent-'+accentColor);
+   }
+   root.dataset.appTheme=theme;
+   root.dataset.appAccent=accentColor;
+   root.style.setProperty('--tg-bg-color',theme==='dark'?'#000':'#f2f2f7');
+   root.style.setProperty('--tg-secondary-bg-color',theme==='dark'?'#2c2c2e':'#fff');
+   root.style.setProperty('--tg-text-color',theme==='dark'?'#f5f5f7':'#111');
+   root.style.setProperty('--tg-hint-color',theme==='dark'?'#a1a1a6':'#8e8e93');
+   const meta=document.querySelector('meta[name="theme-color"]');
+   if(meta)meta.setAttribute('content',theme==='dark'?'#000000':'#f2f2f7');
+ },[theme,accentColor]);
+
  const templates=[...ONBOARDING_TEMPLATES,...customTemplates].filter(t=>selected.includes(t.id));
  const currentTemplate=templates[current];
  const toggleTemplate=(id:string)=>setSelected(v=>v.includes(id)?v.filter(x=>x!==id):[...v,id]);
