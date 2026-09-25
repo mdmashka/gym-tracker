@@ -71,6 +71,7 @@ function buildDefaultData(): AppData {
       isActive: true,
     })),
     workouts: [],
+    onboardingComplete: false,
   };
 }
 
@@ -237,11 +238,27 @@ Deno.serve(async (req) => {
           ? (body as { workoutId: string }).workoutId
           : '';
         if (!workoutId) return json({ error: 'workoutId is required' }, 400);
-        const { error } = await db.from('deleted_workouts').upsert({
-          telegram_user_id: telegramUser.id,
-          workout_id: workoutId,
-        }, { onConflict: 'telegram_user_id,workout_id' });
-        if (error) throw error;
+        const { data: row, error: readError } = await db
+          .from('user_app_data')
+          .select('data')
+          .eq('telegram_user_id', telegramUser.id)
+          .maybeSingle();
+        if (readError) throw readError;
+        const current = row?.data as AppData | undefined;
+        if (current) {
+          const cleaned = {
+            ...current,
+            workouts: Array.isArray(current.workouts)
+              ? current.workouts.filter((w: { id?: string }) => w?.id !== workoutId)
+              : current.workouts,
+          };
+          const { error } = await db.from('user_app_data').upsert({
+            telegram_user_id: telegramUser.id,
+            data: cleaned,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'telegram_user_id' });
+          if (error) throw error;
+        }
         return json({ ok: true });
       }
 
@@ -270,19 +287,19 @@ Deno.serve(async (req) => {
       if (error) throw error;
 
       if (row?.data) {
-        const { data: deletedRows, error: deletedError } = await db
-          .from('deleted_workouts')
-          .select('workout_id')
-          .eq('telegram_user_id', telegramUser.id);
-        if (deletedError) throw deletedError;
-        const deletedIds = new Set((deletedRows ?? []).map((r: { workout_id: string }) => r.workout_id));
-        const filtered = {
-          ...row.data,
-          workouts: Array.isArray(row.data.workouts)
-            ? row.data.workouts.filter((w: { id?: string }) => !w?.id || !deletedIds.has(w.id))
-            : row.data.workouts,
-        };
-        return json(filtered);
+        const existing = row.data as AppData;
+        // Do not surprise existing users with the first-run wizard.
+        if (existing.onboardingComplete === undefined) {
+          const migrated = { ...existing, onboardingComplete: true };
+          const { error: migrateError } = await db.from('user_app_data').upsert({
+            telegram_user_id: telegramUser.id,
+            data: migrated,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'telegram_user_id' });
+          if (migrateError) throw migrateError;
+          return json(migrated);
+        }
+        return json(existing);
       }
 
       const initial = buildDefaultData();
@@ -307,16 +324,7 @@ Deno.serve(async (req) => {
         return json({ error: 'Invalid AppData payload' }, 400);
       }
 
-      const { data: deletedRows, error: deletedError } = await db
-        .from('deleted_workouts')
-        .select('workout_id')
-        .eq('telegram_user_id', telegramUser.id);
-      if (deletedError) throw deletedError;
-      const deletedIds = new Set((deletedRows ?? []).map((r: { workout_id: string }) => r.workout_id));
-      const cleanedBody = {
-        ...body,
-        workouts: body.workouts.filter((w: { id?: string }) => !w?.id || !deletedIds.has(w.id)),
-      };
+      const cleanedBody = body;
 
       const { data, error } = await db
         .from('user_app_data')
