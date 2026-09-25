@@ -45,8 +45,14 @@ export interface Workout {
   exercises: WorkoutExercise[];
 }
 
+export type AppTheme = 'light' | 'dark';
+export type AccentColor = 'red' | 'blue' | 'green' | 'purple' | 'orange' | 'teal' | 'pink';
+
 export interface AppSettings {
   restTimerSeconds: number;
+  restTimerEnabled: boolean;
+  theme: AppTheme;
+  accentColor: AccentColor;
 }
 
 export interface AppData {
