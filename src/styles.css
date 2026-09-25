@@ -421,3 +421,112 @@ html[data-app-theme="light"],html[data-app-theme="light"] body{background:#f2f2f
  .week-card-single{padding:16px}
  .week-card-single .week-stat{min-height:130px}
 }
+
+
+/* FINAL APPEARANCE OVERRIDES — app theme and accent own every UI color */
+html[data-app-theme="dark"] body,
+html[data-app-theme="dark"] #root { background:#000 !important; color:#f5f5f7 !important; }
+html[data-app-theme="light"] body,
+html[data-app-theme="light"] #root { background:#f2f2f7 !important; color:#111 !important; }
+
+.app.theme-dark{
+  --app-bg:#000;
+  --app-card:#2c2c2e;
+  --app-text:#f5f5f7;
+  --app-muted:#a1a1a6;
+  --app-border:#48484a;
+}
+.app.theme-light{
+  --app-bg:#f2f2f7;
+  --app-card:#fff;
+  --app-text:#111;
+  --app-muted:#8e8e93;
+  --app-border:rgba(60,60,67,.16);
+}
+.app{
+  background:var(--app-bg) !important;
+  color:var(--app-text) !important;
+}
+.app .card,
+.app .week-card,
+.app .last-workout-card,
+.app .activity-card,
+.app .home-tools,
+.app .home-tools button,
+.app .modal,
+.app .start-modal{
+  background:var(--app-card);
+  color:var(--app-text);
+  border-color:var(--app-border);
+}
+.app .home-section h2,
+.app .home-hero h1,
+.app .week-stat strong,
+.app .last-workout-info strong,
+.app .activity-head,
+.app .home-tools span{
+  color:var(--app-text);
+}
+.app .home-eyebrow,
+.app .home-date,
+.app .week-stat span,
+.app .last-workout-info span,
+.app .activity-count,
+.app .activity-weekdays span,
+.app .home-tools small,
+.app .muted,
+.app .settings-section-title{
+  color:var(--app-muted);
+}
+.app .week-stat{border-color:var(--app-border);}
+.app .input,
+.app .icon-btn,
+.app .timer-btn,
+.app .start-option{
+  background:color-mix(in srgb,var(--app-text) 9%,var(--app-card));
+  color:var(--app-text);
+  border-color:var(--app-border);
+}
+.app .history-strip{background:color-mix(in srgb,var(--app-text) 7%,var(--app-card));}
+.app .segmented{background:color-mix(in srgb,var(--app-text) 8%,transparent);}
+.app .segmented button.active{background:var(--app-card);color:var(--app-text);}
+
+.app .primary,
+.app .progress-big,
+.app .chart-bar,
+.app .activity-grid span.done,
+.app .ios-switch.on{
+  background:var(--app-accent);
+}
+.app .primary{
+  background:linear-gradient(135deg,var(--app-accent),color-mix(in srgb,var(--app-accent) 72%,white));
+}
+.app .secondary,
+.app .record-badge,
+.app .last-workout-icon,
+.app .tool .app-icon{
+  background:var(--app-accent-soft);
+  color:var(--app-accent);
+}
+.app .progress-big{color:var(--app-accent);background:transparent;}
+.app .record-badge span{color:var(--app-accent);}
+.app .chart-bar{background:linear-gradient(to top,var(--app-accent),color-mix(in srgb,var(--app-accent) 55%,white));}
+.app .activity-grid span.done{color:#fff;}
+.app .activity-grid span.current{outline-color:var(--app-text);}
+.app .activity-grid span.done.current{outline-color:color-mix(in srgb,var(--app-accent) 65%,white);}
+
+.app .app-icon-legs,
+.app .app-icon-arms,
+.app .app-icon-back{
+  background:var(--app-accent-soft);
+  color:var(--app-accent);
+}
+.app .danger-outline{color:#ff3b30 !important;background:rgba(255,59,48,.10) !important;}
+.app .danger-button{background:#ff3b30 !important;}
+
+.app.theme-light .activity-grid span{color:#636366;}
+.app.theme-light .home-tools button:active{background:#f2f2f7;}
+.app.theme-light .start-option:active{background:#e5e5ea;}
+.app.theme-light .timer-fab{background:rgba(255,255,255,.96);color:#111;border-color:var(--app-border);}
+.app.theme-dark .timer-fab{background:rgba(44,44,46,.96);color:#f5f5f7;border-color:var(--app-border);}
+.app.theme-light .modal-backdrop{background:rgba(0,0,0,.28);}
