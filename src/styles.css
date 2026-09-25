@@ -530,3 +530,66 @@ html[data-app-theme="light"] #root { background:#f2f2f7 !important; color:#111 !
 .app.theme-light .timer-fab{background:rgba(255,255,255,.96);color:#111;border-color:var(--app-border);}
 .app.theme-dark .timer-fab{background:rgba(44,44,46,.96);color:#f5f5f7;border-color:var(--app-border);}
 .app.theme-light .modal-backdrop{background:rgba(0,0,0,.28);}
+
+
+/* Final appearance/theme normalization */
+html[data-app-theme="light"] body,
+html[data-app-theme="light"] #root { background:#f2f2f7!important; color:#111!important; }
+html[data-app-theme="dark"] body,
+html[data-app-theme="dark"] #root { background:#000!important; color:#f5f5f7!important; }
+
+.app{
+  background:var(--app-bg)!important;
+  color:var(--app-text)!important;
+  --tg-bg-color:var(--app-bg);
+  --tg-secondary-bg-color:var(--app-card);
+  --tg-text-color:var(--app-text);
+  --tg-hint-color:var(--app-muted);
+  --tg-button-color:var(--app-accent);
+  --tg-link-color:var(--app-accent);
+}
+.app.theme-light{
+  --app-bg:#f2f2f7; --app-card:#fff; --app-text:#111;
+  --app-muted:#8e8e93; --app-border:rgba(60,60,67,.16);
+}
+.app.theme-dark{
+  --app-bg:#000; --app-card:#2c2c2e; --app-text:#f5f5f7;
+  --app-muted:#a1a1a6; --app-border:#48484a;
+}
+.app .muted{color:var(--app-muted)!important}
+.app h1,.app h2,.app h3,.app p,.app .exercise-name,.app .settings-name,
+.app .home-hero h1,.app .home-section h2,.app .week-stat strong,
+.app .last-workout-card,.app .last-workout-info strong,.app .activity-head,
+.app .home-tools button{color:var(--app-text)!important}
+.app .home-eyebrow,.app .home-date,.app .week-stat span,
+.app .last-workout-info span,.app .activity-count,
+.app .activity-weekdays span,.app .home-tools small{color:var(--app-muted)!important}
+.app .card,.app .week-card,.app .last-workout-card,.app .activity-card,
+.app .home-tools,.app .home-tools button,.app .modal{
+  background:var(--app-card)!important;
+  color:var(--app-text)!important;
+  border-color:var(--app-border)!important;
+}
+.app .week-stat{border-color:var(--app-border)!important}
+.app .activity-grid span{color:var(--app-text)!important}
+.app .activity-grid span.done{background:var(--app-accent)!important;color:#fff!important}
+.app .activity-grid span.current{outline-color:var(--app-text)!important}
+.app .activity-grid span.done.current{outline-color:color-mix(in srgb,var(--app-accent) 55%,white)!important}
+.app .last-workout-icon,.app .tool .app-icon{
+  color:var(--app-accent)!important;
+  background:var(--app-accent-soft)!important;
+}
+.app .progress-big{color:var(--app-accent)!important}
+.app .record-badge{background:var(--app-accent-soft)!important}
+.app .record-badge span{color:var(--app-accent)!important}
+.app .chart-bar{background:linear-gradient(to top,var(--app-accent),color-mix(in srgb,var(--app-accent) 45%,white))!important}
+.app .primary{background:linear-gradient(135deg,var(--app-accent),color-mix(in srgb,var(--app-accent) 72%,white))!important}
+.app .secondary{background:var(--app-accent-soft)!important;color:var(--app-accent)!important}
+.app .home-start{box-shadow:0 14px 32px color-mix(in srgb,var(--app-accent) 22%,transparent)!important}
+.app .ios-switch.on{background:var(--app-accent)!important}
+.app .timer-expired .timer-time{color:var(--app-accent)!important}
+.app .pill{color:var(--app-accent)!important}
+.app .cal-day.today{outline-color:var(--app-accent)!important}
+.app .cal-dot{background:var(--app-accent)!important}
+.app .settings-section-title,.app .progress-kicker{color:var(--app-muted)!important}
+.app .input:focus{box-shadow:0 0 0 2px color-mix(in srgb,var(--app-accent) 20%,transparent)!important}
