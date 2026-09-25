@@ -56,7 +56,8 @@ export function startWorkout(data: AppData, typeId: WorkoutTypeId): Workout {
   const exercises = getExercisesForType(data,typeId).map((e,idx)=>({
     id: uid(), exerciseId:e.id, order:idx+1, skipped:false, sets:[]
   }));
-  return { id: uid(), typeId, date:todayISO(), status:'draft', createdAt:new Date().toISOString(), exercises };
+  const now = new Date().toISOString();
+  return { id: uid(), typeId, date:todayISO(), status:'draft', createdAt:now, updatedAt:now, exercises };
 }
 export function ensureWorkoutExercises(workout: Workout, data: AppData): Workout {
   const known = new Set(workout.exercises.map(e=>e.exerciseId));
