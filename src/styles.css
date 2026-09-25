@@ -561,6 +561,13 @@ html[data-app-theme="dark"] #root { background:#000!important; color:#f5f5f7!imp
   --app-bg:#000; --app-card:#2c2c2e; --app-text:#f5f5f7;
   --app-muted:#a1a1a6; --app-border:#48484a;
 }
+.app.accent-red{--app-accent:#ff375f;--app-accent-soft:rgba(255,55,95,.12)}
+.app.accent-purple{--app-accent:#af52de;--app-accent-soft:rgba(175,82,222,.12)}
+.app.accent-blue{--app-accent:#0a84ff;--app-accent-soft:rgba(10,132,255,.12)}
+.app.accent-teal{--app-accent:#14b8a6;--app-accent-soft:rgba(20,184,166,.12)}
+.app.accent-green{--app-accent:#30d158;--app-accent-soft:rgba(48,209,88,.12)}
+.app.accent-orange{--app-accent:#ff9f0a;--app-accent-soft:rgba(255,159,10,.12)}
+.app.accent-yellow{--app-accent:#ffd60a;--app-accent-soft:rgba(255,214,10,.14)}
 .app .muted{color:var(--app-muted)!important}
 .app h1,.app h2,.app h3,.app p,.app .exercise-name,.app .settings-name,
 .app .home-hero h1,.app .home-section h2,.app .week-stat strong,
