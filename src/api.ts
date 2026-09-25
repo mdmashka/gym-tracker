@@ -56,7 +56,7 @@ export async function ensureMenuButton(): Promise<void> {
   const res = await fetch(API_URL, {
     method: 'POST',
     headers: { ...headers(), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'ensure_menu_button' }),
+    body: JSON.stringify({ action: 'ensure_menu_button', url: window.location.origin }),
   });
   if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
 }
