@@ -31,6 +31,7 @@ export function blankData(): AppData {
       isActive: true,
     })),
     workouts: [],
+    onboardingComplete: false,
   };
 }
 
