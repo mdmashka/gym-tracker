@@ -51,6 +51,16 @@ export async function notifyTimerExpired(): Promise<void> {
   if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
 }
 
+export async function deleteRemoteWorkout(workoutId: string): Promise<void> {
+  if (!hasTelegramSession()) return;
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    headers: { ...headers(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'delete_workout', workoutId }),
+  });
+  if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
+}
+
 export async function ensureMenuButton(): Promise<void> {
   if (!hasTelegramSession()) return;
   const res = await fetch(API_URL, {
