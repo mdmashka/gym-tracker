@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import * as XLSX from 'xlsx';
 import type { AppData, Exercise, Screen, SetEntry, Workout, WorkoutExercise, WorkoutTypeId } from './types';
-import { getAppData, isRemoteConfigured, saveRemoteData } from './api';
+import { getAppData, isRemoteConfigured, saveRemoteData, notifyTimerExpired, ensureMenuButton } from './api';
 import { formatDate, formatLongDate, formatReps, formatWeight, getExercisesForType, latestTwoExecutions, lastExecution, startWorkout, todayISO, uid, workoutTypeName, csvEscape, buildExportRows, ensureWorkoutExercises, downloadText } from './utils';
 import { getTelegram, haptic, initTelegram } from './telegram';
 import './styles.css';
@@ -16,12 +16,13 @@ function App(){
   const workoutBack=useRef<()=>void>(()=>{});
   const syncQueue=useRef<Promise<void>>(Promise.resolve());
 
-  useEffect(()=>{ initTelegram(); getAppData().then(setData).catch(e=>setError(String(e))).finally(()=>setLoading(false)); },[]);
+  useEffect(()=>{ initTelegram(); getAppData().then(next=>{const settings=next.settings ?? {restTimerSeconds:120,restTimerEnabled:true,theme:'dark',accentColor:'red'};setData({...next,settings});ensureMenuButton().catch(()=>undefined)}).catch(e=>setError(String(e))).finally(()=>setLoading(false)); },[]);
   useEffect(()=>{
     const tg=getTelegram(); if(!tg) return;
     const handler=()=>workoutBack.current();
     tg.BackButton.onClick(handler); return ()=>tg.BackButton.offClick(handler);
   },[]);
+  useEffect(()=>{if(!data)return;const s=data.settings ?? {restTimerSeconds:120,restTimerEnabled:true,theme:'dark',accentColor:'red'};document.documentElement.dataset.appTheme=s.theme;document.documentElement.dataset.appAccent=s.accentColor;},[data?.settings?.theme,data?.settings?.accentColor]);
   useEffect(()=>{
     const tg=getTelegram(); if(!tg) return;
     const show=screen.kind!=='home';
@@ -63,7 +64,8 @@ function App(){
   if(screen.kind==='history') { const w=data.workouts.find(x=>x.id===screen.workoutId); body=w?<HistoryScreen data={data} workout={w} onEdit={()=>setScreen({kind:'workout',typeId:w.typeId,workoutId:w.id,mode:'edit'})} onDuplicate={()=>{const copy:Workout={...w,id:uid(),date:todayISO(),status:'draft',createdAt:new Date().toISOString(),completedAt:undefined,name:w.name,exercises:w.exercises.map(we=>({...we,id:uid(),sets:we.sets.map(s=>({...s,id:uid()}))}))};commit({...data,workouts:[...data.workouts,copy]}).then(()=>setScreen({kind:'workout',typeId:copy.typeId,workoutId:copy.id}));}} onDelete={()=>{commit({...data,workouts:data.workouts.filter(x=>x.id!==w.id)}).then(()=>setScreen({kind:'calendar'}));}}/>:<NotFound/>; }
   if(screen.kind==='summary') body=<SummaryScreen data={data}/>;
   if(screen.kind==='settings') body=<SettingsScreen data={data} onChange={commit}/>;
-  return <div className="app">{error && <div className="notice no-print">{error}</div>}{body}{timer && <RestTimer timer={timer} onClose={()=>setTimer(null)}/>}</div>;
+  const appSettings=data.settings ?? {restTimerSeconds:120,restTimerEnabled:true,theme:'dark',accentColor:'red'};
+  return <div className={`app theme-${appSettings.theme} accent-${appSettings.accentColor}`}>{error && <div className="notice no-print">{error}</div>}{body}{timer && <RestTimer timer={timer} onClose={()=>setTimer(null)}/>}</div>;
 }
 
 function Top({title,sub,action}:{title:string;sub?:string;action?:React.ReactNode}){ return <div className="topbar"><div><div className="eyebrow">GYM LOG</div><h1>{title}</h1>{sub&&<div className="muted" style={{marginTop:5}}>{sub}</div>}</div>{action}</div> }
@@ -74,86 +76,27 @@ function AppIcon({kind}:{kind:'legs'|'arms'|'back'|'calendar'|'chart'|'settings'
 }
 
 function Home({data,onStart,onNav}:{data:AppData;onStart:(t:WorkoutTypeId)=>void;onNav:(s:Screen)=>void}){
- const today=todayISO();
- const [showStart,setShowStart]=useState(false);
+ const today=todayISO(); const [showStart,setShowStart]=useState(false);
  const completed=data.workouts.filter(w=>w.status==='completed');
- const recent=completed.filter(w=>{
-   const d=new Date(`${today}T12:00:00`).getTime()-new Date(`${w.date}T12:00:00`).getTime();
-   return d>=0 && d<7*24*60*60*1000;
- });
- const volume=recent.reduce((sum,w)=>sum+w.exercises.reduce((s,we)=>s+we.sets.reduce((a,set)=>a+(set.weight??0)*(set.reps??0),0),0),0);
- const minutes=recent.reduce((sum,w)=>{
-   if(!w.completedAt) return sum;
-   const start=new Date(w.createdAt).getTime(), end=new Date(w.completedAt).getTime();
-   const mins=Math.max(0,Math.round((end-start)/60000));
-   return sum+(mins>0&&mins<240?mins:0);
- },0);
+ const now=new Date(`${today}T12:00:00`); const monday=new Date(now); monday.setDate(monday.getDate()-((monday.getDay()+6)%7)); monday.setHours(0,0,0,0);
+ const sunday=new Date(monday); sunday.setDate(monday.getDate()+7);
+ const weekCount=completed.filter(w=>{const d=new Date(`${w.date}T12:00:00`);return d>=monday&&d<sunday}).length;
  const last=[...completed].sort((a,b)=>(b.completedAt??b.date).localeCompare(a.completedAt??a.date))[0];
  const draft=data.workouts.find(w=>w.date===today&&w.status==='draft');
- const monthDate=new Date();
- const y=monthDate.getFullYear(), m=monthDate.getMonth();
- const first=new Date(y,m,1), start=(first.getDay()+6)%7, days=new Date(y,m+1,0).getDate();
- const doneDates=new Set(completed.filter(w=>w.date.startsWith(`${y}-${String(m+1).padStart(2,'0')}-`)).map(w=>w.date));
- const cells:React.ReactNode[]=[];
- for(let i=0;i<start;i++) cells.push(<span key={'empty'+i}/>);
- for(let d=1;d<=days;d++){
-   const date=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-   cells.push(<span key={date} className={`activity-day ${doneDates.has(date)?'done':''} ${date===today?'current':''}`}>{d}</span>);
- }
+ const monthDate=new Date(), y=monthDate.getFullYear(), m=monthDate.getMonth();
+ const first=new Date(y,m,1), start=(first.getDay()+6)%7, days=new Date(y,m+1,0).getDate(), monthKey=`${y}-${String(m+1).padStart(2,'0')}-`;
+ const doneDates=new Set(completed.filter(w=>w.date.startsWith(monthKey)).map(w=>w.date));
+ const cells:React.ReactNode[]=[]; for(let i=0;i<start;i++)cells.push(<span key={'empty'+i}/>); for(let d=1;d<=days;d++){const date=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;cells.push(<span key={date} className={`activity-day ${doneDates.has(date)?'done':''} ${date===today?'current':''}`}>{d}</span>)}
  const icons:Record<WorkoutTypeId,'legs'|'arms'|'back'>={legs:'legs',arms:'arms',back_shoulders:'back'};
  const startWorkout=(typeId:WorkoutTypeId)=>{haptic();setShowStart(false);onStart(typeId)};
  return <div className="screen home-screen">
-   <div className="home-hero">
-     <div className="home-eyebrow">ТРЕНИРОВКИ</div>
-     <h1>Сегодня</h1>
-     <div className="home-date">{new Date(`${today}T12:00:00`).toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long'})}</div>
-     <button className="home-start primary" onClick={()=>{haptic();setShowStart(true)}}>{draft?'Продолжить тренировку':'Начать тренировку'}</button>
-   </div>
-
-   <section className="home-section">
-     <h2>Твоя неделя</h2>
-     <div className="week-card">
-       <div className="week-stat"><strong>{recent.length}</strong><span>тренировки</span></div>
-       <div className="week-stat"><strong>{volume.toLocaleString('ru-RU')}</strong><span>кг объёма</span></div>
-       <div className="week-stat week-stat-wide"><strong>{Math.floor(minutes/60)}:{String(minutes%60).padStart(2,'0')}</strong><span>в зале</span></div>
-     </div>
-   </section>
-
-   {last && <section className="home-section">
-     <h2>Последняя тренировка</h2>
-     <button className="last-workout-card" onClick={()=>onNav({kind:'history',workoutId:last.id})}>
-       <span className="last-workout-icon">↗</span>
-       <span className="last-workout-info"><strong>{last.name||workoutTypeName(data,last.typeId)}</strong><span>{formatDate(last.date)} · {last.exercises.filter(x=>!x.skipped).length} упражнений{last.completedAt&&last.createdAt?' · '+Math.max(1,Math.round((new Date(last.completedAt).getTime()-new Date(last.createdAt).getTime())/60000))+' мин':''}</span></span>
-       <span className="last-workout-chevron">›</span>
-     </button>
-   </section>}
-
-   <section className="home-section">
-     <h2>Активность</h2>
-     <div className="activity-card">
-       <div className="activity-head"><span>{monthDate.toLocaleDateString('ru-RU',{month:'long'})}</span><span className="activity-count">{completed.filter(w=>w.date.startsWith(`${y}-${String(m+1).padStart(2,'0')}-`)).length} тренировок</span></div>
-       <div className="activity-weekdays">{['П','В','С','Ч','П','С','В'].map((x,i)=><span key={i}>{x}</span>)}</div>
-       <div className="activity-grid">{cells}</div>
-     </div>
-   </section>
-
-   <div className="home-tools">
-     <button onClick={()=>onNav({kind:'calendar'})}><span>Календарь</span><small>Все тренировки</small><b>›</b></button>
-     <button onClick={()=>onNav({kind:'summary'})}><span>Прогресс</span><small>Твои результаты</small><b>›</b></button>
-     <button onClick={()=>onNav({kind:'settings'})}><span>Настройки</span><small>Приложение</small><b>›</b></button>
-   </div>
-   {isRemoteConfigured && <div className="muted sync-status">Синхронизация включена</div>}
-
-   {showStart && <div className="modal-backdrop" onClick={()=>setShowStart(false)}>
-     <div className="modal start-modal" onClick={e=>e.stopPropagation()}>
-       <div className="modal-head"><h2>Новая тренировка</h2><button className="icon-btn" onClick={()=>setShowStart(false)}>×</button></div>
-       <div className="start-options">{data.workoutTypes.map(t=><button className="start-option" key={t.id} onClick={()=>startWorkout(t.id)}>
-         <span className={`start-option-icon start-${icons[t.id]}`}><AppIcon kind={icons[t.id]}/></span>
-         <span><strong>{t.name}</strong><small>{data.workouts.filter(w=>w.typeId===t.id&&w.status==='completed').length?'Последняя: '+formatDate([...data.workouts].filter(w=>w.typeId===t.id&&w.status==='completed').sort((a,b)=>b.date.localeCompare(a.date))[0].date):'Начать с нуля'}</small></span>
-         <b>›</b>
-       </button>)}</div>
-     </div>
-   </div>}
+  <div className="home-hero"><div className="home-eyebrow">ТРЕНИРОВКИ</div><h1>Сегодня</h1><div className="home-date">{new Date(`${today}T12:00:00`).toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long'})}</div><button className="home-start primary" onClick={()=>{haptic();setShowStart(true)}}>{draft?'Продолжить тренировку':'Начать тренировку'}</button></div>
+  <section className="home-section"><h2>Твоя неделя</h2><div className="week-card week-card-single"><div className="week-stat"><strong>{weekCount}</strong><span>{weekCount===1?'тренировка':weekCount>=2&&weekCount<=4?'тренировки':'тренировок'}</span></div></div></section>
+  {last&&<section className="home-section"><h2>Последняя тренировка</h2><button className="last-workout-card" onClick={()=>onNav({kind:'history',workoutId:last.id})}><span className="last-workout-icon">↗</span><span className="last-workout-info"><strong>{last.name||workoutTypeName(data,last.typeId)}</strong><span>{formatDate(last.date)} · {last.exercises.filter(x=>!x.skipped).length} упражнений</span></span><span className="last-workout-chevron">›</span></button></section>}
+  <section className="home-section"><h2>Активность</h2><div className="activity-card"><div className="activity-head"><span>{monthDate.toLocaleDateString('ru-RU',{month:'long'})}</span><span className="activity-count">{doneDates.size} тренировок</span></div><div className="activity-weekdays">{['П','В','С','Ч','П','С','В'].map((x,i)=><span key={i}>{x}</span>)}</div><div className="activity-grid">{cells}</div></div></section>
+  <div className="home-tools"><button onClick={()=>onNav({kind:'calendar'})}><span>Календарь</span><small>Все тренировки</small><b>›</b></button><button onClick={()=>onNav({kind:'summary'})}><span>Прогресс</span><small>Твои результаты</small><b>›</b></button><button onClick={()=>onNav({kind:'settings'})}><span>Настройки</span><small>Приложение</small><b>›</b></button></div>
+  {isRemoteConfigured&&<div className="muted sync-status">Синхронизация включена</div>}
+  {showStart&&<div className="modal-backdrop" onClick={()=>setShowStart(false)}><div className="modal start-modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><h2>Новая тренировка</h2><button className="icon-btn" onClick={()=>setShowStart(false)}>×</button></div><div className="start-options">{data.workoutTypes.map(t=><button className="start-option" key={t.id} onClick={()=>startWorkout(t.id)}><span className={`start-option-icon start-${icons[t.id]}`}><AppIcon kind={icons[t.id]}/></span><span><strong>{t.name}</strong><small>{data.workouts.filter(w=>w.typeId===t.id&&w.status==='completed').length?'Последняя: '+formatDate([...data.workouts].filter(w=>w.typeId===t.id&&w.status==='completed').sort((a,b)=>b.date.localeCompare(a.date))[0].date):'Начать с нуля'}</small></span><b>›</b></button>)}</div></div></div>}
  </div>
 }
 function WorkoutScreen({data,workout,editing,onChange,onFinish,onTimer,onHome}:{data:AppData;workout:Workout;editing?:boolean;onChange:(w:Workout)=>void;onFinish:(w:Workout)=>void;onTimer:(s:number)=>void;onHome:()=>void}){
@@ -206,7 +149,7 @@ function ExerciseCard({data,workout,we,ex,open,setOpen,onUpdate,onMove,onSkip,on
    const r=reps.trim()===''?null:Number(reps.replace(',','.'));
    if(r===null || Number.isNaN(r)){ haptic('error'); return; }
    const s:SetEntry={id:uid(),order:we.sets.length+1,weight:w,reps:r,comment:comment.trim()||undefined};
-   onUpdate({sets:[...we.sets,s]}); setReps(''); setComment(''); haptic(); onTimer(data.settings?.restTimerSeconds ?? 120);
+   onUpdate({sets:[...we.sets,s]}); setReps(''); setComment(''); haptic(); if(data.settings?.restTimerEnabled!==false) onTimer(data.settings?.restTimerSeconds ?? 120);
  };
  const copyLast=()=>{
    const p=we.sets.at(-1);
@@ -235,13 +178,9 @@ function ExerciseCard({data,workout,we,ex,open,setOpen,onUpdate,onMove,onSkip,on
 }
 
 function RestTimer({timer,onClose}:{timer:{until:number};onClose:()=>void}){
- const [until,setUntil]=useState(timer.until);
- const [left,setLeft]=useState(Math.max(0,timer.until-Date.now()));
- const [expired,setExpired]=useState(false);
- useEffect(()=>{const id=setInterval(()=>{const n=Math.max(0,until-Date.now());setLeft(n);if(n===0&&!expired){setExpired(true);haptic('success');}},250);return()=>clearInterval(id)},[until,expired]);
- return <div className={`timer-fab ${expired?'timer-expired':''}`}><div><div className="eyebrow">ОТДЫХ</div><div className="timer-time">{expired?'Время вышло':`${String(Math.floor(left/60000)).padStart(2,'0')}:${String(Math.floor((left%60000)/1000)).padStart(2,'0')}`}</div></div><div className="timer-controls"><button className="timer-btn" onClick={()=>{const n=until+30000;setExpired(false);setUntil(n);setLeft(n-Date.now());}}>+30</button><button className="timer-btn" onClick={()=>{const n=Math.max(Date.now(),until-30000);setExpired(false);setUntil(n);setLeft(n-Date.now());}}>−30</button><button className="timer-btn" onClick={onClose}>Готово</button></div></div>
-}
-
+ const [until,setUntil]=useState(timer.until); const [left,setLeft]=useState(Math.max(0,timer.until-Date.now())); const [expired,setExpired]=useState(false); const notified=useRef(false);
+ useEffect(()=>{const id=setInterval(()=>{const n=Math.max(0,until-Date.now());setLeft(n);if(n===0&&!expired){setExpired(true);haptic('success');if(!notified.current){notified.current=true;notifyTimerExpired().catch(()=>undefined);}}},250);return()=>clearInterval(id)},[until,expired]);
+ return <div className={`timer-fab ${expired?'timer-expired':''}`}><div><div className="eyebrow">ОТДЫХ</div><div className="timer-time">{expired?'Время вышло':`${String(Math.floor(left/60000)).padStart(2,'0')}:${String(Math.floor((left%60000)/1000)).padStart(2,'0')}`}</div></div><div className="timer-controls"><button className="timer-btn" onClick={()=>{const n=until+30000;setExpired(false);notified.current=false;setUntil(n);setLeft(n-Date.now());}}>+30</button><button className="timer-btn" onClick={()=>{const n=Math.max(Date.now(),until-30000);setExpired(false);notified.current=false;setUntil(n);setLeft(n-Date.now());}}>−30</button><button className="timer-btn" onClick={onClose}>Готово</button></div></div>
 function CalendarScreen({data,onOpen}:{data:AppData;onOpen:(w:Workout)=>void}){
  const [month,setMonth]=useState(()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth(),1)});
  const y=month.getFullYear(),m=month.getMonth(); const first=new Date(y,m,1); const start=(first.getDay()+6)%7; const days=new Date(y,m+1,0).getDate();
@@ -250,8 +189,13 @@ function CalendarScreen({data,onOpen}:{data:AppData;onOpen:(w:Workout)=>void}){
  return <div className="screen"><Top title="Календарь"/><div className="card"><div className="calendar-head"><button className="secondary" onClick={()=>setMonth(new Date(y,m-1,1))}>‹</button><strong>{month.toLocaleDateString('ru-RU',{month:'long',year:'numeric'})}</strong><button className="secondary" onClick={()=>setMonth(new Date(y,m+1,1))}>›</button></div><div className="month-grid" style={{marginTop:12}}>{['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map(x=><div className="cal-day-name" key={x}>{x}</div>)}{cells}</div></div></div>
 }
 
-function HistoryScreen({data,workout,onEdit,onDuplicate,onDelete}:{data:AppData;workout:Workout;onEdit:()=>void;onDuplicate:()=>void;onDelete:()=>void}){ const [menu,setMenu]=useState(false); const [confirm,setConfirm]=useState(false); return <div className="screen"><Top title={workout.name || workoutTypeName(data,workout.typeId)} sub={formatLongDate(workout.date)} action={<button className="top-action" onClick={()=>setMenu(v=>!v)}>•••</button>}/><div className="action-row no-print"><button className="secondary" onClick={onEdit}>Редактировать</button><button className="secondary" onClick={onDuplicate}>Дублировать</button></div>{menu&&<div className="card no-print"><button className="menu-row" onClick={()=>{setMenu(false);onEdit()}}>Редактировать</button><button className="menu-row" onClick={()=>{setMenu(false);onDuplicate()}}>Дублировать</button><button className="menu-row danger" onClick={()=>{setMenu(false);setConfirm(true)}}>Удалить тренировку</button></div>}{confirm&&<div className="modal-backdrop" onClick={()=>setConfirm(false)}><div className="modal confirm-modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><h2>Удалить тренировку?</h2><button className="icon-btn" onClick={()=>setConfirm(false)}>×</button></div><p className="muted">Запись будет удалена из журнала.</p><div className="action-row" style={{marginTop:14}}><button className="secondary" onClick={()=>setConfirm(false)}>Отмена</button><button className="primary danger-button" onClick={()=>{onDelete();setConfirm(false)}}>Удалить</button></div></div></div>}{[...workout.exercises].sort((a,b)=>a.order-b.order).map(we=>{const ex=data.exercises.find(e=>e.id===we.exerciseId);if(!ex)return null;return <div className="card" key={we.id}><div className="exercise-name">{ex.name}</div>{we.skipped?<div className="muted" style={{marginTop:6}}>Пропущено</div>:we.sets.map(s=><div key={s.id} className="summary-row"><span>Подход {s.order}</span><span className="summary-result">{formatWeight(s.weight)} кг × {formatReps(s.reps)}</span></div>)}{we.notes&&<div className="history-empty">{we.notes}</div>}</div>})}</div> }
-
+function HistoryScreen({data,workout,onEdit,onDuplicate,onDelete}:{data:AppData;workout:Workout;onEdit:()=>void;onDuplicate:()=>void;onDelete:()=>void}){
+ const [confirm,setConfirm]=useState(false);
+ return <div className="screen"><Top title={workout.name || workoutTypeName(data,workout.typeId)} sub={formatLongDate(workout.date)}/>
+  <div className="history-actions no-print"><button className="secondary" onClick={onEdit}>Редактировать</button><button className="secondary" onClick={onDuplicate}>Дублировать</button><button className="secondary danger-outline" onClick={()=>setConfirm(true)}>Удалить</button></div>
+  {confirm&&<div className="modal-backdrop" onClick={()=>setConfirm(false)}><div className="modal confirm-modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><h2>Удалить тренировку?</h2><button className="icon-btn" onClick={()=>setConfirm(false)}>×</button></div><p className="muted">Запись будет удалена из журнала.</p><div className="action-row" style={{marginTop:14}}><button className="secondary" onClick={()=>setConfirm(false)}>Отмена</button><button className="primary danger-button" onClick={()=>{onDelete();setConfirm(false)}}>Удалить</button></div></div></div>}
+  {[...workout.exercises].sort((a,b)=>a.order-b.order).map(we=>{const ex=data.exercises.find(e=>e.id===we.exerciseId);if(!ex)return null;return <div className="card" key={we.id}><div className="exercise-name">{ex.name}</div>{we.skipped?<div className="muted" style={{marginTop:6}}>Пропущено</div>:we.sets.map(s=><div key={s.id} className="summary-row"><span>Подход {s.order}</span><span className="summary-result">{formatWeight(s.weight)} кг × {formatReps(s.reps)}</span></div>)}{we.notes&&<div className="history-empty">{we.notes}</div>}</div>})}
+ </div>
 function SummaryScreen({data}:{data:AppData}){
  const [exercise,setExercise]=useState('all'); const [from,setFrom]=useState(''); const [to,setTo]=useState('');
  const active=data.exercises.filter(e=>e.isActive).sort((a,b)=>a.name.localeCompare(b.name,'ru'));
@@ -273,58 +217,30 @@ function ProgressExerciseCard({stat}:{stat:{ex:Exercise;points:Array<{date:strin
  return <div className="card progress-card"><div className="progress-card-head"><div><div className="exercise-name">{stat.ex.name}</div><div className="muted">{stat.points.length} подходов</div></div>{stat.best&&<div className="record-badge"><span>ЛУЧШИЙ</span><strong>{formatWeight(stat.best.weight)} кг × {formatReps(stat.best.reps)}</strong></div>}</div><div className="mini-chart">{weighted.slice(-12).map((p,i)=><div className="chart-col" key={i}><div className="chart-bar" style={{height:`${max===min?48:18+((Number(p.weight)-min)/(max-min))*62}px`}}/><span>{formatWeight(p.weight)}</span></div>)}</div><div className="recent-results">{recent.map((p,i)=><div className="summary-row" key={i}><span>{formatDate(p.date)}</span><span className="summary-result">{formatWeight(p.weight)} кг × {formatReps(p.reps)}</span></div>)}</div></div>;
 }
 function SettingsScreen({data,onChange}:{data:AppData;onChange:(d:AppData)=>Promise<void>|void}){
- const [addName,setAddName]=useState('');
- const [target,setTarget]=useState<WorkoutTypeId>(data.workoutTypes[0].id);
- const [draggingId,setDraggingId]=useState<string|null>(null);
- const dragId=useRef<string|null>(null);
- const exercises=getExercisesForType(data,target);
- const normalize=(items:Exercise[])=>{const order=new Map(items.map((x,i)=>[x.id,i+1]));return data.exercises.map(x=>order.has(x.id)?{...x,sortOrder:order.get(x.id)!}:x)};
+ const [addName,setAddName]=useState(''); const [target,setTarget]=useState<WorkoutTypeId>(data.workoutTypes[0].id); const [draggingId,setDraggingId]=useState<string|null>(null); const dragId=useRef<string|null>(null);
+ const settings=data.settings ?? {restTimerSeconds:120,restTimerEnabled:true,theme:'dark' as const,accentColor:'red' as const};
+ const exercises=getExercisesForType(data,target); const normalize=(items:Exercise[])=>{const order=new Map(items.map((x,i)=>[x.id,i+1]));return data.exercises.map(x=>order.has(x.id)?{...x,sortOrder:order.get(x.id)!}:x)};
+ const updateSettings=(patch:Partial<typeof settings>)=>onChange({...data,settings:{...settings,...patch}});
  const add=()=>{const name=addName.trim();if(!name)return;const existing=data.exercises.find(e=>e.workoutTypeId===target&&e.name.trim().toLowerCase()===name.toLowerCase());if(existing){const max=Math.max(0,...data.exercises.filter(e=>e.workoutTypeId===target&&e.isActive&&e.id!==existing.id).map(e=>e.sortOrder));onChange({...data,exercises:data.exercises.map(e=>e.id===existing.id?{...e,isActive:true,sortOrder:max+1}:e)})}else{const max=Math.max(0,...data.exercises.filter(e=>e.workoutTypeId===target).map(e=>e.sortOrder));const ex:Exercise={id:uid(),name,workoutTypeId:target,loadType:'weight',sortOrder:max+1,isActive:true};onChange({...data,exercises:[...data.exercises,ex]})}setAddName('')};
  const remove=(id:string)=>{const active=exercises.filter(e=>e.id!==id);onChange({...data,exercises:normalize(active).map(x=>x.id===id?{...x,isActive:false}:x)})};
  const reorder=(fromId:string,toId:string)=>{if(fromId===toId)return;const arr=[...exercises];const from=arr.findIndex(x=>x.id===fromId),to=arr.findIndex(x=>x.id===toId);if(from<0||to<0)return;const [item]=arr.splice(from,1);arr.splice(to,0,item);onChange({...data,exercises:normalize(arr)})};
- const startDrag=(id:string,e:React.PointerEvent)=>{
-   if(e.pointerType==='mouse'&&e.button!==0)return;
-   e.preventDefault();
-   dragId.current=id;
-   setDraggingId(id);
-   haptic();
-   (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
- };
-
- const moveDrag=(e:PointerEvent|React.PointerEvent)=>{
-   if(!dragId.current)return;
-   e.preventDefault();
-   const el=document.elementFromPoint(e.clientX,e.clientY)?.closest('.settings-item') as HTMLElement|null;
-   const overId=el?.dataset.id;
-   if(overId&&overId!==dragId.current)reorder(dragId.current,overId);
- };
- const endDrag=()=>{
-   dragId.current=null;
-   setDraggingId(null);
-   document.body.style.overflow='';
-   document.body.style.touchAction='';
- };
- useEffect(()=>{
-   if(!draggingId)return;
-   const move=(e:PointerEvent)=>moveDrag(e);
-   const end=()=>endDrag();
-   document.addEventListener('pointermove',move,{passive:false});
-   document.addEventListener('pointerup',end,{passive:false});
-   document.addEventListener('pointercancel',end,{passive:false});
-   document.body.style.overflow='hidden';
-   document.body.style.touchAction='none';
-   return()=>{
-     document.removeEventListener('pointermove',move);
-     document.removeEventListener('pointerup',end);
-     document.removeEventListener('pointercancel',end);
-     document.body.style.overflow='';
-     document.body.style.touchAction='';
-   };
- },[draggingId]);
- const restTimerSeconds=data.settings?.restTimerSeconds ?? 120;
- const setRestTimer=(seconds:number)=>onChange({...data,settings:{...data.settings,restTimerSeconds:seconds}});
- return <div className="screen"><Top title="Настройки" sub="Приложение и шаблоны"/><div className="card settings-group"><div className="settings-section-title">ТАЙМЕР ОТДЫХА</div><div className="settings-item timer-setting"><div><strong>После сохранения подхода</strong><div className="muted">Стандартная длительность</div></div><select className="input" style={{width:105}} value={restTimerSeconds} onChange={e=>setRestTimer(Number(e.target.value))}>{Array.from({length:20},(_,i)=>(i+1)*30).map(s=><option key={s} value={s}>{Math.floor(s/60)}:{String(s%60).padStart(2,'0')}</option>)}</select></div></div><div className="card"><div className="settings-section-title">УПРАЖНЕНИЯ</div><div className="segmented">{data.workoutTypes.map(t=><button key={t.id} className={target===t.id?'active':''} onClick={()=>setTarget(t.id)}>{t.name}</button>)}</div><div className="settings-list">{exercises.map(ex=><div className={'settings-item '+(draggingId===ex.id?'is-dragging':'')} data-id={ex.id} key={ex.id} onPointerDown={e=>startDrag(ex.id,e)} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}><span className="settings-drag-hint" aria-hidden="true">≡</span><span className="settings-name">{ex.name}</span><button className="settings-delete" aria-label={'Удалить '+ex.name+' из шаблона'} onPointerDown={e=>e.stopPropagation()} onClick={()=>remove(ex.id)}>−</button></div>)}{exercises.length===0&&<div className="muted settings-empty">В шаблоне пока нет упражнений</div>}</div><div className="settings-tip">Нажми и удерживай строку, затем перетащи её в нужное место.</div></div><div className="card"><div className="exercise-name">Добавить упражнение</div><div className="form-grid" style={{marginTop:10}}><input className="input" value={addName} onChange={e=>setAddName(e.target.value)} placeholder="Название упражнения"/><button className="primary" onClick={add}>Добавить в шаблон</button></div><div className="muted" style={{fontSize:12,marginTop:8}}>Разовое добавление во время тренировки остаётся доступно отдельно.</div></div></div>
-}
+ const startDrag=(id:string,e:React.PointerEvent)=>{if(e.pointerType==='mouse'&&e.button!==0)return;e.preventDefault();dragId.current=id;setDraggingId(id);haptic();(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)};
+ const moveDrag=(e:PointerEvent|React.PointerEvent)=>{if(!dragId.current)return;e.preventDefault();const el=document.elementFromPoint(e.clientX,e.clientY)?.closest('.settings-item') as HTMLElement|null;const overId=el?.dataset.id;if(overId&&overId!==dragId.current)reorder(dragId.current,overId)};
+ const endDrag=()=>{dragId.current=null;setDraggingId(null);document.body.style.overflow='';document.body.style.touchAction=''};
+ useEffect(()=>{if(!draggingId)return;const move=(e:PointerEvent)=>moveDrag(e);const end=()=>endDrag();document.addEventListener('pointermove',move,{passive:false});document.addEventListener('pointerup',end,{passive:false});document.addEventListener('pointercancel',end,{passive:false});document.body.style.overflow='hidden';document.body.style.touchAction='none';return()=>{document.removeEventListener('pointermove',move);document.removeEventListener('pointerup',end);document.removeEventListener('pointercancel',end);document.body.style.overflow='';document.body.style.touchAction=''}},[draggingId]);
+ const accentOptions=[['red','Красный','#ff375f'],['pink','Розовый','#ff2d55'],['purple','Фиолетовый','#af52de'],['blue','Синий','#0a84ff'],['teal','Бирюзовый','#14b8a6'],['green','Зелёный','#30d158'],['orange','Оранжевый','#ff9f0a']] as const;
+ return <div className="screen"><Top title="Настройки" sub="Приложение и шаблоны"/>
+  <div className="card settings-group"><div className="settings-section-title">ОФОРМЛЕНИЕ</div>
+   <div className="settings-item"><div><strong>Тема</strong><div className="muted">Не зависит от темы Telegram</div></div><div className="segmented compact"><button className={settings.theme==='light'?'active':''} onClick={()=>updateSettings({theme:'light'})}>Белая</button><button className={settings.theme==='dark'?'active':''} onClick={()=>updateSettings({theme:'dark'})}>Чёрная</button></div></div>
+   <div className="accent-picker"><div className="accent-picker-title">Акцентный цвет</div><div className="accent-options">{accentOptions.map(([id,name,color])=><button key={id} title={name} aria-label={name} className={`accent-swatch ${settings.accentColor===id?'selected':''}`} style={{'--swatch':color} as React.CSSProperties} onClick={()=>updateSettings({accentColor:id})}><span/></button>)}</div></div>
+  </div>
+  <div className="card settings-group"><div className="settings-section-title">ТАЙМЕР ОТДЫХА</div>
+   <div className="settings-item timer-setting"><div><strong>Таймер после подхода</strong><div className="muted">{settings.restTimerEnabled?'Запускается автоматически':'Таймер отключён'}</div></div><button className={`ios-switch ${settings.restTimerEnabled?'on':''}`} aria-label="Таймер отдыха" onClick={()=>updateSettings({restTimerEnabled:!settings.restTimerEnabled})}><span/></button></div>
+   {settings.restTimerEnabled&&<div className="settings-item timer-setting"><div><strong>Длительность</strong><div className="muted">Шаг 30 секунд</div></div><select className="input timer-select" value={settings.restTimerSeconds} onChange={e=>updateSettings({restTimerSeconds:Number(e.target.value)})}>{Array.from({length:20},(_,i)=>(i+1)*30).map(s=><option key={s} value={s}>{Math.floor(s/60)}:{String(s%60).padStart(2,'0')}</option>)}</select></div>}
+  </div>
+  <div className="card"><div className="settings-section-title">УПРАЖНЕНИЯ</div><div className="segmented">{data.workoutTypes.map(t=><button key={t.id} className={target===t.id?'active':''} onClick={()=>setTarget(t.id)}>{t.name}</button>)}</div><div className="settings-list">{exercises.map(ex=><div className={'settings-item '+(draggingId===ex.id?'is-dragging':'')} data-id={ex.id} key={ex.id} onPointerDown={e=>startDrag(ex.id,e)} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}><span className="settings-drag-hint" aria-hidden="true">≡</span><span className="settings-name">{ex.name}</span><button className="settings-delete" aria-label={'Удалить '+ex.name+' из шаблона'} onPointerDown={e=>e.stopPropagation()} onClick={()=>remove(ex.id)}>−</button></div>)}</div><div className="settings-tip">Нажми и удерживай строку, затем перетащи её в нужное место.</div></div>
+  <div className="card"><div className="exercise-name">Добавить упражнение</div><div className="form-grid" style={{marginTop:10}}><input className="input" value={addName} onChange={e=>setAddName(e.target.value)} placeholder="Название упражнения"/><button className="primary" onClick={add}>Добавить в шаблон</button></div><div className="muted" style={{fontSize:12,marginTop:8}}>Разовое добавление во время тренировки остаётся доступно отдельно.</div></div>
+ </div>
 function WorkoutMetaEditor({data,workout,onClose,onSave}:{data:AppData;workout:Workout;onClose:()=>void;onSave:(w:Workout)=>void}){
  const [date,setDate]=useState(workout.date); const [name,setName]=useState(workout.name??''); const [type,setType]=useState(workout.typeId);
  return <div className="modal-backdrop" onClick={onClose}><div className="modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><h2>Данные тренировки</h2><button className="icon-btn" onClick={onClose}>×</button></div><div className="form-grid"><label className="field-label">Название<input className="input" value={name} onChange={e=>setName(e.target.value)} placeholder={workoutTypeName(data,type)}/></label><label className="field-label">Тип<select className="input" value={type} onChange={e=>setType(e.target.value as WorkoutTypeId)}>{data.workoutTypes.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label><label className="field-label">Дата<input className="input" type="date" value={date} onChange={e=>setDate(e.target.value)}/></label><button className="primary" onClick={()=>onSave({...workout,name:name.trim()||undefined,typeId:type,date})}>Сохранить</button></div></div></div>
