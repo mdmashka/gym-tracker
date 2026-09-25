@@ -41,6 +41,26 @@ export async function getAppData(): Promise<AppData> {
   }
 }
 
+export async function notifyTimerExpired(): Promise<void> {
+  if (!hasTelegramSession()) return;
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    headers: { ...headers(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'timer_expired' }),
+  });
+  if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
+}
+
+export async function ensureMenuButton(): Promise<void> {
+  if (!hasTelegramSession()) return;
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    headers: { ...headers(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'ensure_menu_button' }),
+  });
+  if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
+}
+
 export async function saveRemoteData(data: AppData): Promise<AppData> {
   // Always persist locally first. This also makes drafts survive a reload.
   saveData(data);
