@@ -24,20 +24,23 @@ export async function getAppData(): Promise<AppData> {
   if (!hasTelegramSession()) return loadData();
 
   try {
-    const res = await fetch(`${API_URL}`, { headers: headers() });
-    if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
-    const data = await res.json() as AppData;
-    data.workoutTypes = data.workoutTypes.map(t => t.id==='arms' ? {...t,name:'Руки и грудь'} : t.id==='back_shoulders' ? {...t,name:'Спина и плечи'} : t);
-    saveData(data);
-    return data;
+    // Do not let a stalled network request leave the Mini App on the splash screen forever.
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 8000);
+    try {
+      const res = await fetch(`${API_URL}`, { headers: headers(), signal: controller.signal });
+      if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
+      const data = await res.json() as AppData;
+      data.workoutTypes = data.workoutTypes.map(t => t.id==='arms' ? {...t,name:'Руки и грудь'} : t.id==='back_shoulders' ? {...t,name:'Спина и плечи'} : t);
+      saveData(data);
+      return data;
+    } finally {
+      window.clearTimeout(timeout);
+    }
   } catch (error) {
-    // Inside Telegram, never silently fall back to the local demo/default data:
-    // that can make a real account look empty when the remote API is failing.
-    // Browser/demo mode may still use local storage.
-    if (hasTelegramSession()) throw error;
-
-    const local = loadData();
-    return local;
+    console.warn('Remote data unavailable, using local cache:', error);
+    return loadData();
+  }
   }
 }
 
