@@ -323,7 +323,7 @@ Deno.serve(async (req) => {
         .upsert(
           {
             telegram_user_id: telegramUser.id,
-            data: body,
+            data: cleanedBody,
             updated_at: new Date().toISOString(),
           },
           { onConflict: 'telegram_user_id' },
