@@ -699,8 +699,15 @@ html[data-app-theme="dark"] #root { background:#000!important; color:#f5f5f7!imp
 .onboarding-group.selected,.onboarding-exercise.selected{border-color:var(--app-accent);background:var(--app-accent-soft)}
 .onboarding-group i,.onboarding-exercise i{margin-left:auto;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:transparent;color:transparent;font-style:normal;border:1.5px solid var(--app-muted)}
 .onboarding-group.selected i,.onboarding-exercise.selected i{background:var(--app-accent);border-color:var(--app-accent);color:#fff}
-.onboarding-icon{font-size:24px;width:34px;text-align:center}
-.onboarding-group span:nth-child(2),.onboarding-exercise span{font-size:16px;font-weight:650}
+.onboarding-template-name,.onboarding-exercise span{font-size:16px;font-weight:650}
+.onboarding-hint{font-size:12px;line-height:1.45;color:var(--app-muted);padding:0 4px}
+.onboarding-settings-card{background:var(--app-card);border:1px solid var(--app-border);border-radius:20px;padding:4px 15px}
+.onboarding-setting-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:16px 0;border-bottom:1px solid var(--app-border)}
+.onboarding-setting-row>div:first-child{display:flex;flex-direction:column;gap:4px}
+.onboarding-setting-row strong,.onboarding-setting-block>strong{font-size:15px}
+.onboarding-setting-row span{font-size:12px;color:var(--app-muted)}
+.onboarding-setting-block{padding:16px 0}
+.onboarding-setting-block>strong{display:block;margin-bottom:13px}
 .onboarding-next{width:100%;margin-top:auto}
 .onboarding-progress{display:flex;justify-content:space-between;color:var(--app-muted);font-size:11px;font-weight:750;letter-spacing:.06em}
 .custom-exercise-box{padding:15px;border-radius:20px;background:var(--app-card);border:1px solid var(--app-border)}
