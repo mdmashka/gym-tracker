@@ -53,7 +53,19 @@ function App(){
     onNav={setScreen}/>;
   if(screen.kind==='workout') {
     const w0=data.workouts.find(w=>w.id===screen.workoutId);
-    body=w0?<WorkoutScreen data={data} workout={w0} editing={screen.mode==='edit'} onChange={w=>commit({...data,workouts:data.workouts.map(x=>x.id===w.id?{...w,updatedAt:new Date().toISOString()}:x)})} onFinish={w=>commit({...data,workouts:data.workouts.map(x=>x.id===w.id?{...x,status:'completed',completedAt:new Date().toISOString(),updatedAt:new Date().toISOString()}:x)})} onTimer={(seconds)=>setTimer({until:Date.now()+seconds*1000})} onHome={()=>setScreen({kind:'home'})}/>:<NotFound/>;
+    body=w0?<WorkoutScreen data={data} workout={w0} editing={screen.mode==='edit'}
+      onChange={w=>commit({...data,workouts:data.workouts.map(x=>x.id===w.id?{...w,updatedAt:new Date().toISOString()}:x)})}
+      onFinish={w=>commit({...data,workouts:data.workouts.map(x=>x.id===w.id?{...x,status:'completed',completedAt:new Date().toISOString(),updatedAt:new Date().toISOString()}:x)})}
+      onTimer={(seconds)=>setTimer({until:Date.now()+seconds*1000})}
+      onHome={()=>setScreen({kind:'home'})}
+      onDeleteDraft={async()=>{
+        const next={...data,workouts:data.workouts.filter(x=>x.id!==w0.id)};
+        await deleteRemoteWorkout(w0.id);
+        setTimer(null);
+        await commit(next);
+        setScreen({kind:'home'});
+      }}
+    />:<NotFound/>;
   }
   if(screen.kind==='calendar') body=<CalendarScreen data={data} onOpen={w=>setScreen({kind:'history',workoutId:w.id})}/>;
   if(screen.kind==='history') { const w=data.workouts.find(x=>x.id===screen.workoutId); body=w?<HistoryScreen data={data} workout={w}
@@ -138,10 +150,12 @@ function Home({data,onStart,onContinue,onNav}:{data:AppData;onStart:(t:WorkoutTy
   {showStart&&<div className="modal-backdrop" onClick={()=>setShowStart(false)}><div className="modal start-modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><h2>Новая тренировка</h2><button className="icon-btn" onClick={()=>setShowStart(false)}>×</button></div><div className="start-options">{data.workoutTypes.map(t=><button className="start-option" key={t.id} onClick={()=>startWorkout(t.id)}><span className={`start-option-icon start-${iconForType(t.id)}`}><AppIcon kind={iconForType(t.id)}/></span><span><strong>{t.name}</strong><small>{data.workoutTypes.length>1?'Тренировка':'Новая тренировка'}</small></span><b>›</b></button>)}</div></div></div>}
  </div>
 }
-function WorkoutScreen({data,workout,editing,onChange,onFinish,onTimer,onHome}:{data:AppData;workout:Workout;editing?:boolean;onChange:(w:Workout)=>void;onFinish:(w:Workout)=>void;onTimer:(s:number)=>void;onHome:()=>void}){
+function WorkoutScreen({data,workout,editing,onChange,onFinish,onTimer,onHome,onDeleteDraft}:{data:AppData;workout:Workout;editing?:boolean;onChange:(w:Workout)=>void;onFinish:(w:Workout)=>void;onTimer:(s:number)=>void;onHome:()=>void;onDeleteDraft:()=>Promise<void>}){
  const [currentId,setCurrentId]=useState<string|null>(()=>workout.exercises.find(x=>!x.skipped&&x.sets.length===0)?.id ?? workout.exercises.find(x=>!x.skipped)?.id ?? null);
  const [showAdd,setShowAdd]=useState(false);
  const [showMeta,setShowMeta]=useState(false);
+ const [showDraftMenu,setShowDraftMenu]=useState(false);
+ const [showDraftDeleteConfirm,setShowDraftDeleteConfirm]=useState(false);
  const exercises=[...workout.exercises].sort((a,b)=>a.order-b.order);
  const updateWe=(id:string,patch:Partial<WorkoutExercise>)=>onChange({...workout,exercises:workout.exercises.map(x=>x.id===id?{...x,...patch}:x)});
  const addOneShot=(exercise:Exercise)=>{
@@ -167,7 +181,15 @@ function WorkoutScreen({data,workout,editing,onChange,onFinish,onTimer,onHome}:{
  const saveEdit=()=>{haptic('success');onChange({...workout,status:'completed',completedAt:workout.completedAt??new Date().toISOString()});onHome();};
  const typeName=workoutTypeName(data,workout.typeId);
  return <div className="screen">
-  <Top title={workout.name || typeName} sub={`${formatLongDate(workout.date)} · ${workout.status==='draft'?'в процессе':'завершено'}`} action={<button className="top-action" onClick={()=>setShowMeta(true)}>•••</button>}/>
+  <Top title={workout.name || typeName} sub={`${formatLongDate(workout.date)} · ${workout.status==='draft'?'в процессе':'завершено'}`} action={
+    <div className="top-action-wrap">
+      <button className="top-action" aria-label="Действия с тренировкой" onClick={()=>workout.status==='draft'?setShowDraftMenu(v=>!v):setShowMeta(true)}>•••</button>
+      {workout.status==='draft'&&showDraftMenu&&<div className="workout-top-menu">
+        <button onClick={()=>{setShowDraftMenu(false);setShowMeta(true)}}>Редактировать данные</button>
+        <button className="danger" onClick={()=>{setShowDraftMenu(false);setShowDraftDeleteConfirm(true)}}>Удалить черновик</button>
+      </div>}
+    </div>
+  }/>
   <div className="exercise-list">
    {exercises.map((we,idx)=>{
     const ex=data.exercises.find(e=>e.id===we.exerciseId); if(!ex)return null;
@@ -179,6 +201,14 @@ function WorkoutScreen({data,workout,editing,onChange,onFinish,onTimer,onHome}:{
   {showAdd && <div className="modal-backdrop" onClick={()=>setShowAdd(false)}><div className="modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><h2>Добавить упражнение</h2><button className="icon-btn" onClick={()=>setShowAdd(false)}>×</button></div><div className="exercise-list">{data.exercises.filter(e=>e.isActive).map(e=><button className="card choice-card" key={e.id} disabled={workout.exercises.some(w=>w.exerciseId===e.id)} style={{opacity:workout.exercises.some(w=>w.exerciseId===e.id)?0.45:1}} onClick={()=>{if(workout.exercises.some(w=>w.exerciseId===e.id))return;addOneShot(e);setShowAdd(false);}}><span className="meta"><span className="choice-title">{e.name}</span><span className="choice-sub">{workoutTypeName(data,e.workoutTypeId)}</span></span><span className="chevron">›</span></button>)}</div></div></div>}
   <div className="workout-finish-bar"><button className="primary" onClick={editing?saveEdit:finish}>{editing?'Сохранить изменения':'Завершить тренировку'}</button></div>
   {showMeta && <WorkoutMetaEditor data={data} workout={workout} onClose={()=>setShowMeta(false)} onSave={w=>{onChange(w);setShowMeta(false)}}/>}
+  {showDraftDeleteConfirm&&<div className="modal-backdrop" onClick={()=>setShowDraftDeleteConfirm(false)}><div className="modal confirm-modal" onClick={e=>e.stopPropagation()}>
+    <div className="modal-head"><h2>Удалить черновик?</h2><button className="icon-btn" onClick={()=>setShowDraftDeleteConfirm(false)}>×</button></div>
+    <p className="muted">Незавершённая тренировка будет удалена из журнала. Вернуть её нельзя.</p>
+    <div className="action-row" style={{marginTop:14}}>
+      <button className="secondary" onClick={()=>setShowDraftDeleteConfirm(false)}>Отмена</button>
+      <button className="primary danger-button" onClick={async()=>{await onDeleteDraft();setShowDraftDeleteConfirm(false)}}>Удалить</button>
+    </div>
+  </div></div>}
   {showReview && <div className="modal-backdrop" onClick={onHome}><div className="modal workout-review-modal" onClick={e=>e.stopPropagation()}>
     <div className="modal-head"><h2>Тренировка завершена</h2><button className="icon-btn" onClick={onHome}>×</button></div>
     <div className="review-hero"><strong>{reviewStats.sets}</strong><span>подходов</span></div>
