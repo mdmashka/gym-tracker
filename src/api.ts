@@ -62,9 +62,19 @@ export async function ensureMenuButton(): Promise<void> {
 }
 
 export async function saveRemoteData(data: AppData): Promise<AppData> {
+  // A workout marked completed without any recorded sets is an accidental empty record,
+  // not a real workout. Remove such records before every sync so stale clients cannot
+  // re-upload them after a server-side cleanup.
+  const cleaned: AppData = {
+    ...data,
+    workouts: data.workouts.filter(w =>
+      w.status !== 'completed' ||
+      w.exercises.some(ex => ex.sets.length > 0)
+    ),
+  };
   // Always persist locally first. Remote sync must never be allowed to lose a workout.
-  saveData(data);
-  if (!hasTelegramSession()) return data;
+  saveData(cleaned);
+  if (!hasTelegramSession()) return cleaned;
 
   let lastError: unknown = null;
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -72,7 +82,7 @@ export async function saveRemoteData(data: AppData): Promise<AppData> {
       const res = await fetch(`${API_URL}`, {
         method: 'PUT',
         headers: { ...headers(), 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify(cleaned),
       });
       if (res.ok) return await res.json() as AppData;
 
