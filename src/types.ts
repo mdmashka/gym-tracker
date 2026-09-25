@@ -1,5 +1,5 @@
-export type WorkoutTypeId = 'legs' | 'arms' | 'back_shoulders';
-export type LoadType = 'weight' | 'assisted' | 'dumbbell' | 'plate' | 'custom';
+export type WorkoutTypeId = string;
+export type LoadType = 'weight' | 'assisted' | 'dumbbell' | 'plate' | 'custom' | 'bodyweight';
 
 export interface WorkoutType {
   id: WorkoutTypeId;
@@ -41,6 +41,7 @@ export interface Workout {
   date: string;
   status: 'draft' | 'completed';
   createdAt: string;
+  updatedAt?: string;
   completedAt?: string;
   exercises: WorkoutExercise[];
 }
@@ -60,6 +61,7 @@ export interface AppData {
   exercises: Exercise[];
   workouts: Workout[];
   settings?: AppSettings;
+  onboardingComplete?: boolean;
 }
 
 export type Screen =
