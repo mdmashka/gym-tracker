@@ -80,7 +80,8 @@ function Home({data,onStart,onNav}:{data:AppData;onStart:(t:WorkoutTypeId)=>void
  const completed=data.workouts.filter(w=>w.status==='completed');
  const now=new Date(`${today}T12:00:00`); const monday=new Date(now); monday.setDate(monday.getDate()-((monday.getDay()+6)%7)); monday.setHours(0,0,0,0);
  const sunday=new Date(monday); sunday.setDate(monday.getDate()+7);
- const weekCount=completed.filter(w=>{const d=new Date(`${w.date}T12:00:00`);return d>=monday&&d<sunday}).length;
+ const weekCompleted=completed.filter(w=>{const d=new Date(`${w.date}T12:00:00`);return d>=monday&&d<sunday});
+ const weekCount=Array.from(new Map(weekCompleted.map(w=>[w.id,w])).values()).length;
  const last=[...completed].sort((a,b)=>(b.completedAt??b.date).localeCompare(a.completedAt??a.date))[0];
  const draft=data.workouts.find(w=>w.date===today&&w.status==='draft');
  const monthDate=new Date(), y=monthDate.getFullYear(), m=monthDate.getMonth();
