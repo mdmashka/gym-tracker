@@ -45,23 +45,15 @@ function App(){
   if(!data) return <div className="app"><div className="card"><h2>Не удалось открыть журнал</h2><p className="muted">{error}</p></div></div>;
 
   let body:React.ReactNode;
-  if(screen.kind==='home') body=<Home data={data} onStart={typeId=>{
-    const existing=data.workouts.find(w=>w.typeId===typeId&&w.date===todayISO()&&w.status==='draft');
-    if(existing) {
-      const ensured=ensureWorkoutExercises(existing,data);
-      if(ensured!==existing) commit({...data,workouts:data.workouts.map(w=>w.id===existing.id?ensured:w)});
-      setScreen({kind:'workout',typeId,workoutId:existing.id});
-    } else {
-      const w=startWorkout(data,typeId);
-      // Открываем тренировку сразу после выбора. Синхронизация идёт в фоне
-      // и не должна блокировать переход в экран заполнения.
-      setScreen({kind:'workout',typeId,workoutId:w.id});
-      commit({...data,workouts:[...data.workouts,w]});
-    }
-  }} onNav={setScreen}/>;
+  if(screen.kind==='home' && !data.onboardingComplete) {
+    body=<Onboarding data={data} onComplete={(next)=>{commit({...next,onboardingComplete:true}).then(()=>setScreen({kind:'home'}));}}/>;
+  } else if(screen.kind==='home') body=<Home data={data}
+    onStart={(typeId)=>{const w=startWorkout(data,typeId);setScreen({kind:'workout',typeId,workoutId:w.id});commit({...data,workouts:[...data.workouts,w]});}}
+    onContinue={(draft)=>{const ensured=ensureWorkoutExercises(draft,data);if(ensured!==draft)commit({...data,workouts:data.workouts.map(w=>w.id===draft.id?ensured:w)});setScreen({kind:'workout',typeId:draft.typeId,workoutId:draft.id});}}
+    onNav={setScreen}/>;
   if(screen.kind==='workout') {
     const w0=data.workouts.find(w=>w.id===screen.workoutId);
-    body=w0?<WorkoutScreen data={data} workout={w0} editing={screen.mode==='edit'} onChange={w=>commit({...data,workouts:data.workouts.map(x=>x.id===w.id?w:x)})} onFinish={w=>commit({...data,workouts:data.workouts.map(x=>x.id===w.id?{...x,status:'completed',completedAt:new Date().toISOString()}:x)})} onTimer={(seconds)=>setTimer({until:Date.now()+seconds*1000})} onHome={()=>setScreen({kind:'home'})}/>:<NotFound/>;
+    body=w0?<WorkoutScreen data={data} workout={w0} editing={screen.mode==='edit'} onChange={w=>commit({...data,workouts:data.workouts.map(x=>x.id===w.id?{...w,updatedAt:new Date().toISOString()}:x)})} onFinish={w=>commit({...data,workouts:data.workouts.map(x=>x.id===w.id?{...x,status:'completed',completedAt:new Date().toISOString(),updatedAt:new Date().toISOString()}:x)})} onTimer={(seconds)=>setTimer({until:Date.now()+seconds*1000})} onHome={()=>setScreen({kind:'home'})}/>:<NotFound/>;
   }
   if(screen.kind==='calendar') body=<CalendarScreen data={data} onOpen={w=>setScreen({kind:'history',workoutId:w.id})}/>;
   if(screen.kind==='history') { const w=data.workouts.find(x=>x.id===screen.workoutId); body=w?<HistoryScreen data={data} workout={w}
@@ -75,6 +67,28 @@ function App(){
   return <div className={`app theme-${appSettings.theme} accent-${appSettings.accentColor}`}>{error && <div className="notice no-print">{error}</div>}{body}{timer && <RestTimer timer={timer} onClose={()=>setTimer(null)}/>}</div>;
 }
 
+
+const ONBOARDING_GROUPS = [
+ {id:'legs',name:'Ноги',icon:'🦵',exercises:['Жим ногами','Разгибание ног','Сгибание ног','Икры']},
+ {id:'glutes',name:'Ягодицы',icon:'🍑',exercises:['Ягодичный мост','Отведение ноги назад','Болгарские приседания','Румынская тяга']},
+ {id:'back',name:'Спина',icon:'🦅',exercises:['Тяга верхнего блока','Тяга нижнего блока','Тяга сидя','Подтягивания']},
+ {id:'chest',name:'Грудь',icon:'🏋️',exercises:['Жим лёжа','Жим гантелей','Разведение гантелей','Сведение рук']},
+ {id:'shoulders',name:'Плечи',icon:'◼️',exercises:['Жим гантелей сидя','Разведение в стороны','Задняя дельта','Тяга к подбородку']},
+ {id:'arms',name:'Руки',icon:'💪',exercises:['Подъём на бицепс','Молотки','Разгибание на трицепс','Трицепс на блоке']},
+ {id:'abs',name:'Пресс',icon:'◉',exercises:['Скручивания','Подъём ног','Планка']}
+] as const;
+function formatDraftTime(value:string){const d=new Date(value),n=new Date();return d.toDateString()===n.toDateString()?d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}):d.toLocaleDateString('ru-RU',{day:'numeric',month:'short'})+' · '+d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});}
+function Onboarding({data,onComplete}:{data:AppData;onComplete:(next:AppData)=>void}){
+ const [step,setStep]=useState(1);const [selected,setSelected]=useState<string[]>(['legs','back']);const [current,setCurrent]=useState(0);const [chosen,setChosen]=useState<Record<string,string[]>>({});const [custom,setCustom]=useState('');const [customBodyweight,setCustomBodyweight]=useState(false);
+ const groups=ONBOARDING_GROUPS.filter(g=>selected.includes(g.id));const currentGroup=groups[current];
+ const toggleGroup=(id:string)=>setSelected(v=>v.includes(id)?v.filter(x=>x!==id):[...v,id]);
+ const toggleExercise=(name:string)=>currentGroup&&setChosen(v=>{const a=v[currentGroup.id]??[];return {...v,[currentGroup.id]:a.includes(name)?a.filter(x=>x!==name):[...a,name]};});
+ const addCustom=()=>{if(!currentGroup||!custom.trim())return;const name=custom.trim();setChosen(v=>({...v,[currentGroup.id]:[...(v[currentGroup.id]??[]),name]}));setCustom('');};
+ const finish=()=>{const workoutTypes=groups.map(g=>({id:g.id,name:g.name,slug:g.id}));const exercises:Exercise[]=[];groups.forEach(g=>(chosen[g.id]??[]).forEach((name,i)=>exercises.push({id:uid(),workoutTypeId:g.id,name,loadType:'weight',sortOrder:i+1,isActive:true})));onComplete({...data,workoutTypes,exercises,workouts:[],onboardingComplete:true});};
+ if(step===1)return <div className="onboarding screen"><div className="onboarding-hero"><div className="onboarding-kicker">GYM TRACKER</div><h1>Настроим тренировки</h1><p>Выберите группы мышц, которые вы тренируете.</p></div><div className="onboarding-options">{ONBOARDING_GROUPS.map(g=><button key={g.id} className={'onboarding-group '+(selected.includes(g.id)?'selected':'')} onClick={()=>toggleGroup(g.id)}><span className="onboarding-icon">{g.icon}</span><span>{g.name}</span><i>✓</i></button>)}</div><button className="primary onboarding-next" disabled={!selected.length} onClick={()=>{setChosen(Object.fromEntries(groups.map(g=>[g.id,g.exercises.slice(0,2)])));setStep(2)}}>Далее</button></div>;
+ if(!currentGroup)return null;
+ return <div className="onboarding screen"><div className="onboarding-progress"><span>ШАГ 2</span><b>{current+1} / {groups.length}</b></div><div className="onboarding-hero"><div className="onboarding-kicker">{currentGroup.icon} {currentGroup.name}</div><h1>Соберите шаблон</h1><p>Выберите готовые упражнения или добавьте своё.</p></div><div className="onboarding-options">{currentGroup.exercises.map(name=><button key={name} className={'onboarding-exercise '+((chosen[currentGroup.id]??[]).includes(name)?'selected':'')} onClick={()=>toggleExercise(name)}><span>{name}</span><i>✓</i></button>)}</div><div className="custom-exercise-box"><div className="settings-section-title">СВОЁ УПРАЖНЕНИЕ</div><div className="form-grid"><input className="input" value={custom} onChange={e=>setCustom(e.target.value)} placeholder="Название упражнения"/><button className={'bodyweight-toggle onboarding-bodyweight '+(customBodyweight?'on':'')} onClick={()=>setCustomBodyweight(v=>!v)}><span>Собственный вес</span><i>✓</i></button><button className="secondary" onClick={addCustom}>Добавить в шаблон</button></div></div><div className="onboarding-actions"><button className="secondary" disabled={current===0} onClick={()=>setCurrent(v=>v-1)}>Назад</button>{current<groups.length-1?<button className="primary" onClick={()=>setCurrent(v=>v+1)}>Следующая группа</button>:<button className="primary" onClick={finish}>Готово</button>}</div></div>;
+}
 function Top({title,sub,action}:{title:string;sub?:string;action?:React.ReactNode}){ return <div className="topbar"><div><div className="eyebrow">GYM LOG</div><h1>{title}</h1>{sub&&<div className="muted" style={{marginTop:5}}>{sub}</div>}</div>{action}</div> }
 
 function AppIcon({kind}:{kind:'legs'|'arms'|'back'|'calendar'|'chart'|'settings'}){
@@ -82,7 +96,7 @@ function AppIcon({kind}:{kind:'legs'|'arms'|'back'|'calendar'|'chart'|'settings'
  return <span className={'app-icon app-icon-'+kind} aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={paths[kind]}/></svg></span>
 }
 
-function Home({data,onStart,onNav}:{data:AppData;onStart:(t:WorkoutTypeId)=>void;onNav:(s:Screen)=>void}){
+function Home({data,onStart,onContinue,onNav}:{data:AppData;onStart:(t:WorkoutTypeId)=>void;onContinue:(w:Workout)=>void;onNav:(s:Screen)=>void}){
  const today=todayISO(); const [showStart,setShowStart]=useState(false);
  const [month,setMonth]=useState(()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth(),1)});
  const [selectedDate,setSelectedDate]=useState<string|null>(null);
@@ -92,7 +106,7 @@ function Home({data,onStart,onNav}:{data:AppData;onStart:(t:WorkoutTypeId)=>void
  const weekCompleted=completed.filter(w=>{const d=new Date(`${w.date}T12:00:00`);return d>=monday&&d<sunday});
  const weekCount=Array.from(new Map(weekCompleted.map(w=>[w.id,w])).values()).length;
  const last=[...completed].sort((a,b)=>(b.completedAt??b.date).localeCompare(a.completedAt??a.date))[0];
- const draft=data.workouts.find(w=>w.date===today&&w.status==='draft');
+ const drafts=data.workouts.filter(w=>w.status==='draft').sort((a,b)=>(b.updatedAt??b.createdAt).localeCompare(a.updatedAt??a.createdAt)); const draft=drafts[0];
  const y=month.getFullYear(), m=month.getMonth();
  const first=new Date(y,m,1), start=(first.getDay()+6)%7, days=new Date(y,m+1,0).getDate();
  const byDate=new Map<string,Workout[]>();
@@ -105,11 +119,11 @@ function Home({data,onStart,onNav}:{data:AppData;onStart:(t:WorkoutTypeId)=>void
    const dayWorkouts=byDate.get(date)??[];
    cells.push(<button type="button" key={date} className={`activity-day ${dayWorkouts.length?'done':''} ${date===today?'current':''}`} onClick={()=>dayWorkouts.length&&setSelectedDate(date)}>{d}</button>);
  }
- const icons:Record<WorkoutTypeId,'legs'|'arms'|'back'>={legs:'legs',arms:'arms',back_shoulders:'back'};
- const startWorkout=(typeId:WorkoutTypeId)=>{haptic();setShowStart(false);onStart(typeId)};
+ const iconForType=(typeId:WorkoutTypeId):'legs'|'arms'|'back' => typeId==='legs'?'legs':typeId==='arms'||typeId==='chest'?'arms':'back'; const startWorkout=(typeId:WorkoutTypeId)=>{haptic();setShowStart(false);onStart(typeId)};
  const selectedWorkouts=selectedDate?([...byDate.get(selectedDate)??[]].sort((a,b)=>(a.completedAt??'').localeCompare(b.completedAt??''))):[];
  return <div className="screen home-screen">
-  <div className="home-hero"><div className="home-eyebrow">ТРЕНИРОВКИ</div><h1>Сегодня</h1><div className="home-date">{new Date(`${today}T12:00:00`).toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long'})}</div><button className="home-start primary" onClick={()=>{haptic();setShowStart(true)}}>{draft?'Продолжить тренировку':'Начать тренировку'}</button></div>
+  <div className="home-hero"><div className="home-eyebrow">ТРЕНИРОВКИ</div><h1>Сегодня</h1><div className="home-date">{new Date(`${today}T12:00:00`).toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long'})}</div><button className="home-start primary" onClick={()=>{haptic();draft?onContinue(draft):setShowStart(true)}}>{draft?'Продолжить тренировку':'Начать тренировку'}</button>
+  {draft&&<div className="draft-preview" onClick={()=>onContinue(draft)}><div><strong>{workoutTypeName(data,draft.typeId)}</strong><span>{draft.name||'Черновик тренировки'}</span></div><div className="draft-time">изменено {formatDraftTime(draft.updatedAt??draft.createdAt)}<b>›</b></div></div></div>
   <section className="home-section"><h2>Твоя неделя</h2><div className="week-card week-card-single"><div className="week-stat"><strong>{weekCount}</strong><span>{weekCount===1?'тренировка':weekCount>=2&&weekCount<=4?'тренировки':'тренировок'}</span></div></div></section>
   {last&&<section className="home-section"><h2>Последняя тренировка</h2><button className="last-workout-card" onClick={()=>onNav({kind:'history',workoutId:last.id})}><span className="last-workout-icon">↗</span><span className="last-workout-info"><strong>{last.name||workoutTypeName(data,last.typeId)}</strong><span>{formatDate(last.date)} · {last.exercises.filter(x=>!x.skipped).length} упражнений</span></span><span className="last-workout-chevron">›</span></button></section>}
   <section className="home-section"><h2>Активность</h2><div className="activity-card">
@@ -121,7 +135,7 @@ function Home({data,onStart,onNav}:{data:AppData;onStart:(t:WorkoutTypeId)=>void
   <div className="home-tools"><button onClick={()=>onNav({kind:'summary'})}><span>Прогресс</span><small>Твои результаты</small><b>›</b></button><button onClick={()=>onNav({kind:'settings'})}><span>Настройки</span><small>Приложение</small><b>›</b></button></div>
   {isRemoteConfigured&&<div className="muted sync-status">Синхронизация включена</div>}
   {selectedDate&&<div className="modal-backdrop" onClick={()=>setSelectedDate(null)}><div className="modal start-modal date-workout-modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><h2>{formatLongDate(selectedDate)}</h2><button className="icon-btn" onClick={()=>setSelectedDate(null)}>×</button></div>{selectedWorkouts.map(w=><button key={w.id} className="start-option" onClick={()=>{setSelectedDate(null);onNav({kind:'history',workoutId:w.id})}}><span><strong>{w.name||workoutTypeName(data,w.typeId)}</strong><small>{w.exercises.filter(x=>!x.skipped).length} упражнений</small></span><b>›</b></button>)}</div></div>}
-  {showStart&&<div className="modal-backdrop" onClick={()=>setShowStart(false)}><div className="modal start-modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><h2>Новая тренировка</h2><button className="icon-btn" onClick={()=>setShowStart(false)}>×</button></div><div className="start-options">{data.workoutTypes.map(t=><button className="start-option" key={t.id} onClick={()=>startWorkout(t.id)}><span className={`start-option-icon start-${icons[t.id]}`}><AppIcon kind={icons[t.id]}/></span><span><strong>{t.name}</strong><small>{data.workoutTypes.length>1?'Тренировка':'Новая тренировка'}</small></span><b>›</b></button>)}</div></div></div>}
+  {showStart&&<div className="modal-backdrop" onClick={()=>setShowStart(false)}><div className="modal start-modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><h2>Новая тренировка</h2><button className="icon-btn" onClick={()=>setShowStart(false)}>×</button></div><div className="start-options">{data.workoutTypes.map(t=><button className="start-option" key={t.id} onClick={()=>startWorkout(t.id)}><span className={`start-option-icon start-${iconForType(t.id)}`}><AppIcon kind={iconForType(t.id)}/></span><span><strong>{t.name}</strong><small>{data.workoutTypes.length>1?'Тренировка':'Новая тренировка'}</small></span><b>›</b></button>)}</div></div></div>}
  </div>
 }
 function WorkoutScreen({data,workout,editing,onChange,onFinish,onTimer,onHome}:{data:AppData;workout:Workout;editing?:boolean;onChange:(w:Workout)=>void;onFinish:(w:Workout)=>void;onTimer:(s:number)=>void;onHome:()=>void}){
@@ -185,10 +199,10 @@ function ExerciseCard({data,workout,we,ex,open,setOpen,onUpdate,onMove,onSkip,on
  const [menu,setMenu]=useState(false);
  const [pendingSetDelete,setPendingSetDelete]=useState<string|null>(null);
  const [pendingExerciseDelete,setPendingExerciseDelete]=useState(false);
- const hist=latestTwoExecutions(data,workout.typeId,ex.id);
+ const hist=latestTwoExecutions(data,workout.typeId,ex.id); const bodyweight=ex.loadType==='bodyweight';
  useEffect(()=>{const prev=we.sets[we.sets.length-1]?.weight;if(prev!=null)setWeight(String(prev));},[we.sets.length]);
  const saveSet=()=>{
-   const w=weight.trim()===''?null:Number(weight.replace(',','.'));
+   const w=bodyweight ? 0 : (weight.trim()===''?null:Number(weight.replace(',','.'));
    const r=reps.trim()===''?null:Number(reps.replace(',','.'));
    if(r===null || Number.isNaN(r)){ haptic('error'); return; }
    const s:SetEntry={id:uid(),order:we.sets.length+1,weight:w,reps:r,comment:comment.trim()||undefined};
@@ -208,10 +222,10 @@ function ExerciseCard({data,workout,we,ex,open,setOpen,onUpdate,onMove,onSkip,on
   </div>
   {hist.length>0 && <div className="history-strip"><div className="history-date">Последние тренировки</div>{hist.map(h=><div key={h.workout.id} style={{marginBottom:4}}><strong style={{fontSize:13}}>{formatDate(h.workout.date)}</strong> <span className="muted" style={{fontSize:12}}>·</span> <span style={{fontSize:13}}>{h.workoutExercise.sets.map(s=>`${formatWeight(s.weight)}×${formatReps(s.reps)}`).join(' · ')}</span></div>)}</div>}
   {open && !we.skipped && <>
-    <div style={{marginTop:8}}>{we.sets.map(s=><div className="set-line" key={s.id}><span className="set-num">{s.order}</span><span>{formatWeight(s.weight)} кг</span><span>{formatReps(s.reps)} повт.</span><button className="icon-btn" onClick={()=>setPendingSetDelete(s.id)}>×</button></div>)}</div>
+    <div style={{marginTop:8}}>{we.sets.map(s=><div className="set-line" key={s.id}><span className="set-num">{s.order}</span><span>{bodyweight?'Собственный вес':formatWeight(s.weight)+' кг'}</span><span>{formatReps(s.reps)} повт.</span><button className="icon-btn" onClick={()=>setPendingSetDelete(s.id)}>×</button></div>)}</div>
     {pendingSetDelete && <div className="modal-backdrop" onClick={()=>setPendingSetDelete(null)}><div className="modal confirm-modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><h2>Удалить подход?</h2><button className="icon-btn" onClick={()=>setPendingSetDelete(null)}>×</button></div><p className="muted">Этот подход будет удалён из тренировки.</p><div className="action-row" style={{marginTop:14}}><button className="secondary" onClick={()=>setPendingSetDelete(null)}>Отмена</button><button className="primary danger-button" onClick={()=>{onUpdate({sets:we.sets.filter(x=>x.id!==pendingSetDelete).map((x,i)=>({...x,order:i+1}))});setPendingSetDelete(null)}}>Удалить</button></div></div></div>}
     {pendingExerciseDelete && <div className="modal-backdrop" onClick={()=>setPendingExerciseDelete(false)}><div className="modal confirm-modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><h2>Удалить упражнение?</h2><button className="icon-btn" onClick={()=>setPendingExerciseDelete(false)}>×</button></div><p className="muted">Упражнение и все сохранённые подходы исчезнут из этой тренировки.</p><div className="action-row" style={{marginTop:14}}><button className="secondary" onClick={()=>setPendingExerciseDelete(false)}>Отмена</button><button className="primary danger-button" onClick={()=>{onDelete();setPendingExerciseDelete(false)}}>Удалить</button></div></div></div>}
-    <div className="set-line" style={{borderTop:we.sets.length?'1px solid rgba(128,128,128,.11)':'0'}}><span className="set-num">{we.sets.length+1}</span><input className="input" inputMode="decimal" placeholder="Вес" value={weight} onChange={e=>setWeight(e.target.value)}/><input className="input" inputMode="numeric" placeholder="Повторы" value={reps} onChange={e=>setReps(e.target.value)}/><button className="icon-btn" onClick={saveSet}>✓</button></div>
+    <div className="set-line" style={{gridTemplateColumns:bodyweight?'28px 1fr 36px':'28px 1fr 1fr 36px',borderTop:we.sets.length?'1px solid rgba(128,128,128,.11)':'0'}}><span className="set-num">{we.sets.length+1}</span>{bodyweight?<span className="bodyweight-label">Собственный вес</span>:<input className="input" inputMode="decimal" placeholder="Вес" value={weight} onChange={e=>setWeight(e.target.value)}/>}<input className="input" inputMode="numeric" placeholder="Повторы" value={reps} onChange={e=>setReps(e.target.value)}/><button className="icon-btn" onClick={saveSet}>✓</button></div>
     <div className="set-actions"><button className="secondary" onClick={copyLast}>Скопировать</button><button className="secondary" onClick={()=>saveSet()}>+ Подход</button></div>
     <textarea className="input comment-input notes" placeholder="Комментарий к следующему подходу (необязательно)" value={comment} onChange={e=>setComment(e.target.value)}/>
     {we.notes && <div className="history-empty">Импортированная заметка: {we.notes}</div>}
@@ -238,7 +252,7 @@ function HistoryScreen({data,workout,onEdit,onDuplicate,onRepeat,onDelete}:{data
  return <div className="screen"><Top title={workout.name || workoutTypeName(data,workout.typeId)} sub={formatLongDate(workout.date)}/>
   <div className="history-actions no-print"><button className="secondary" onClick={onEdit}>Редактировать</button><button className="secondary" onClick={onRepeat}>Повторить</button><button className="secondary" onClick={onDuplicate}>Дублировать</button><button className="secondary danger-outline" onClick={()=>setConfirm(true)}>Удалить</button></div>
   {confirm&&<div className="modal-backdrop" onClick={()=>setConfirm(false)}><div className="modal confirm-modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><h2>Удалить тренировку?</h2><button className="icon-btn" onClick={()=>setConfirm(false)}>×</button></div><p className="muted">Запись будет удалена из журнала.</p><div className="action-row" style={{marginTop:14}}><button className="secondary" onClick={()=>setConfirm(false)}>Отмена</button><button className="primary danger-button" onClick={()=>{onDelete();setConfirm(false)}}>Удалить</button></div></div></div>}
-  {[...workout.exercises].sort((a,b)=>a.order-b.order).map(we=>{const ex=data.exercises.find(e=>e.id===we.exerciseId);if(!ex)return null;return <div className="card" key={we.id}><div className="exercise-name">{ex.name}</div>{we.skipped?<div className="muted" style={{marginTop:6}}>Пропущено</div>:we.sets.map(s=><div key={s.id} className="summary-row"><span>Подход {s.order}</span><span className="summary-result">{formatWeight(s.weight)} кг × {formatReps(s.reps)}</span></div>)}{we.notes&&<div className="history-empty">{we.notes}</div>}</div>})}
+  {[...workout.exercises].sort((a,b)=>a.order-b.order).filter(we=>we.sets.length>0).map(we=>{const ex=data.exercises.find(e=>e.id===we.exerciseId);if(!ex)return null;return <div className="card" key={we.id}><div className="exercise-name">{ex.name}</div>{we.sets.map(s=><div key={s.id} className="summary-row"><span>Подход {s.order}</span><span className="summary-result">{ex.loadType==='bodyweight'?'Собственный вес × '+formatReps(s.reps)+' повт.':formatWeight(s.weight)+' кг × '+formatReps(s.reps)}</span></div>)}{we.notes&&<div className="history-empty">{we.notes}</div>}</div>})}
  </div>
 }
 function SummaryScreen({data}:{data:AppData}){
@@ -283,7 +297,7 @@ function SettingsScreen({data,onChange}:{data:AppData;onChange:(d:AppData)=>Prom
    <div className="settings-item timer-setting"><div><strong>Таймер после подхода</strong><div className="muted">{settings.restTimerEnabled?'Запускается автоматически':'Таймер отключён'}</div></div><button className={`ios-switch ${settings.restTimerEnabled?'on':''}`} aria-label="Таймер отдыха" onClick={()=>updateSettings({restTimerEnabled:!settings.restTimerEnabled})}><span/></button></div>
    {settings.restTimerEnabled&&<div className="settings-item timer-setting"><div><strong>Длительность</strong><div className="muted">Шаг 30 секунд</div></div><select className="input timer-select" value={settings.restTimerSeconds} onChange={e=>updateSettings({restTimerSeconds:Number(e.target.value)})}>{Array.from({length:20},(_,i)=>(i+1)*30).map(s=><option key={s} value={s}>{Math.floor(s/60)}:{String(s%60).padStart(2,'0')}</option>)}</select></div>}
   </div>
-  <div className="card"><div className="settings-section-title">УПРАЖНЕНИЯ</div><div className="segmented">{data.workoutTypes.map(t=><button key={t.id} className={target===t.id?'active':''} onClick={()=>setTarget(t.id)}>{t.name}</button>)}</div><div className="settings-list">{exercises.map(ex=><div className={'settings-item '+(draggingId===ex.id?'is-dragging':'')} data-id={ex.id} key={ex.id} onPointerDown={e=>startDrag(ex.id,e)} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}><span className="settings-drag-hint" aria-hidden="true">≡</span><span className="settings-name">{ex.name}</span><button className="settings-delete" aria-label={'Удалить '+ex.name+' из шаблона'} onPointerDown={e=>e.stopPropagation()} onClick={()=>remove(ex.id)}>−</button></div>)}</div><div className="settings-tip">Нажми и удерживай строку, затем перетащи её в нужное место.</div></div>
+  <div className="card"><div className="settings-section-title">УПРАЖНЕНИЯ</div><div className="segmented">{data.workoutTypes.map(t=><button key={t.id} className={target===t.id?'active':''} onClick={()=>setTarget(t.id)}>{t.name}</button>)}</div><div className="settings-list">{exercises.map(ex=><div className={'settings-item '+(draggingId===ex.id?'is-dragging':'')} data-id={ex.id} key={ex.id} onPointerDown={e=>startDrag(ex.id,e)} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}><span className="settings-drag-hint" aria-hidden="true">≡</span><span className="settings-name">{ex.name}</span><button className={'bodyweight-toggle '+(ex.loadType==='bodyweight'?'on':'')} onPointerDown={e=>e.stopPropagation()} onClick={()=>onChange({...data,exercises:data.exercises.map(x=>x.id===ex.id?{...x,loadType:x.loadType==='bodyweight'?'weight':'bodyweight'}:x)})}><span>Собственный вес</span><i>✓</i></button><button className="settings-delete" aria-label={'Удалить '+ex.name+' из шаблона'} onPointerDown={e=>e.stopPropagation()} onClick={()=>remove(ex.id)}>−</button></div>)}</div><div className="settings-tip">Нажми и удерживай строку, затем перетащи её в нужное место.</div></div>
   <div className="card"><div className="exercise-name">Добавить упражнение</div><div className="form-grid" style={{marginTop:10}}><input className="input" value={addName} onChange={e=>setAddName(e.target.value)} placeholder="Название упражнения"/><button className="primary" onClick={add}>Добавить в шаблон</button></div><div className="muted" style={{fontSize:12,marginTop:8}}>Разовое добавление во время тренировки остаётся доступно отдельно.</div></div>
  </div>
 }
