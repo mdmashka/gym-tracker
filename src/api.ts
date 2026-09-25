@@ -41,7 +41,6 @@ export async function getAppData(): Promise<AppData> {
     console.warn('Remote data unavailable, using local cache:', error);
     return loadData();
   }
-  }
 }
 
 export async function notifyTimerExpired(): Promise<void> {
