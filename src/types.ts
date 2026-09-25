@@ -21,6 +21,7 @@ export interface SetEntry {
   order: number;
   weight: number | null;
   reps: number | null;
+  loadType?: 'weight' | 'bodyweight';
   comment?: string;
   loadMeta?: Record<string, unknown>;
 }
@@ -30,6 +31,7 @@ export interface WorkoutExercise {
   exerciseId: string;
   order: number;
   skipped: boolean;
+  loadType?: 'weight' | 'bodyweight';
   notes?: string;
   sets: SetEntry[];
 }
