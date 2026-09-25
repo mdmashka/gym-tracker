@@ -16,7 +16,7 @@ function App(){
   const workoutBack=useRef<()=>void>(()=>{});
   const syncQueue=useRef<Promise<void>>(Promise.resolve());
 
-  useEffect(()=>{ initTelegram(); getAppData().then(next=>{const settings=next.settings ?? {restTimerSeconds:120,restTimerEnabled:true,theme:'dark',accentColor:'red'};setData({...next,settings});ensureMenuButton().catch(()=>undefined)}).catch(e=>setError(String(e))).finally(()=>setLoading(false)); },[]);
+  useEffect(()=>{ initTelegram(); getAppData().then(next=>{const settings=next.settings ?? {restTimerSeconds:120,restTimerEnabled:true,theme:'dark',accentColor:'red'}; const demoResetKey='gym-tracker-demo-onboarding-reset-v1'; const shouldReplayOnboarding=localStorage.getItem(demoResetKey)!=='done'; if(shouldReplayOnboarding) localStorage.setItem(demoResetKey,'done'); setData({...next,settings,onboardingComplete:shouldReplayOnboarding?false:next.onboardingComplete}); ensureMenuButton().catch(()=>undefined)}).catch(e=>setError(String(e))).finally(()=>setLoading(false)); },[]);
   useEffect(()=>{
     const tg=getTelegram(); if(!tg) return;
     const handler=()=>workoutBack.current();
