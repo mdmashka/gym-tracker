@@ -925,3 +925,14 @@ html[data-app-theme="dark"] #root { background:#000!important; color:#f5f5f7!imp
 .add-exercise-divider:before,.add-exercise-divider:after{content:"";height:1px;background:var(--app-border);flex:1}
 .bodyweight-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;font-size:13px;color:var(--app-muted);padding:0 8px}
 .set-line .bodyweight-label{width:auto}
+
+/* Activity tiles: use app theme, not the enclosing week-card surface */
+.app .activity-stats-grid{background:transparent!important;border:0!important;padding:0!important}
+.app .activity-stats-grid .activity-stat-tile{background:var(--app-card);color:var(--app-text);border-color:var(--app-border)}
+.app.theme-light .activity-stats-grid .activity-stat-tile strong{color:var(--app-text)}
+.app.theme-light .activity-stats-grid .activity-stat-tile>span{color:var(--app-muted)}
+.app.theme-dark .activity-stats-grid .activity-stat-tile strong{color:var(--app-text)}
+.app.theme-dark .activity-stats-grid .activity-stat-tile>span{color:var(--app-muted)}
+.bodyweight-label{width:100%;min-width:0;box-sizing:border-box;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 4px;font-size:12px;line-height:1.2}
+.set-line .bodyweight-label{justify-self:stretch}
+.sync-status{font-size:10px;opacity:.65}
