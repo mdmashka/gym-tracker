@@ -188,19 +188,26 @@ function Onboarding({data,onComplete}:{data:AppData;onComplete:(next:AppData)=>v
  </div>;
 }
 function WelcomeTour({onClose}:{onClose:()=>void}){
+ const [tourStep,setTourStep]=useState(0);
+ const slides=[
+  {kicker:'НАЧНЁМ',title:'Записывай тренировки',text:'Подходы, повторения и вес — всё остаётся в истории.',icon:'legs'},
+  {kicker:'ИСТОРИЯ',title:'Возвращайся к прошлым дням',text:'Календарь помогает быстро найти любую тренировку и открыть её детали.',icon:'calendar'},
+  {kicker:'ПРОГРЕСС',title:'Смотри, как меняются результаты',text:'История, лучшие результаты и экспорт данных — в одном месте.',icon:'chart'},
+  {kicker:'НАСТРОЙКИ',title:'Подстрой приложение под себя',text:'Шаблоны, упражнения, нагрузка, таймер, тема и акцентный цвет.',icon:'settings'},
+  {kicker:'ВСЁ ГОТОВО',title:'Можно тренироваться',text:'Остальное приложение покажет по ходу. Начни с первой тренировки.',icon:'arms'}
+ ] as const;
+ const slide=slides[tourStep];
  return <div className="welcome-tour-backdrop">
   <div className="welcome-tour" role="dialog" aria-modal="true">
-   <div className="onboarding-kicker">GYM TRACKER</div>
-   <h1>Готово. Поехали.</h1>
-   <p className="welcome-tour-lead">Коротко о том, где что находится.</p>
-   <div className="welcome-tour-list">
-    <div><strong>Тренировки</strong><span>Создавайте, продолжайте и редактируйте тренировочные дни.</span></div>
-    <div><strong>Календарь</strong><span>Открывайте любую прошлую тренировку по дате.</span></div>
-    <div><strong>Прогресс</strong><span>Смотрите историю, лучшие результаты и выгружайте данные в Excel, CSV или PDF.</span></div>
-    <div><strong>Настройки</strong><span>Меняйте шаблоны, упражнения, нагрузку, таймер, тему и акцент.</span></div>
+   <div className="welcome-tour-progress">{slides.map((_,i)=><span key={i} className={i===tourStep?'active':''}/>)}</div>
+   <div className="welcome-tour-icon"><AppIcon kind={slide.icon}/></div>
+   <div className="onboarding-kicker">{slide.kicker}</div>
+   <h1>{slide.title}</h1>
+   <p className="welcome-tour-lead">{slide.text}</p>
+   <div className="welcome-tour-footer">
+    {tourStep>0?<button className="secondary welcome-tour-back" onClick={()=>setTourStep(v=>v-1)}>Назад</button>:<span/>}
+    {tourStep<slides.length-1?<button className="primary" onClick={()=>setTourStep(v=>v+1)}>Далее</button>:<button className="primary" onClick={onClose}>Начать</button>}
    </div>
-   <div className="welcome-tour-note">Записывай подходы — приложение сохранит историю. Остальное можно настроить по ходу.</div>
-   <button className="primary" onClick={onClose}>Начать</button>
   </div>
  </div>
 }
