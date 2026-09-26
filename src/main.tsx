@@ -277,11 +277,18 @@ function Home({data,onStart,onContinue,onNav}:{data:AppData;onStart:(t:WorkoutTy
 function WorkoutScreen({data,workout,editing,onChange,onFinish,onTimer,onHome,onDeleteDraft}:{data:AppData;workout:Workout;editing?:boolean;onChange:(w:Workout)=>void;onFinish:(w:Workout)=>void;onTimer:(s:number)=>void;onHome:()=>void;onDeleteDraft:()=>Promise<void>}){
  const [currentId,setCurrentId]=useState<string|null>(()=>workout.exercises.find(x=>!x.skipped&&x.sets.length===0)?.id ?? workout.exercises.find(x=>!x.skipped)?.id ?? null);
  const [showAdd,setShowAdd]=useState(false);
+ const [customExerciseName,setCustomExerciseName]=useState('');
  const [showMeta,setShowMeta]=useState(false);
  const [showDraftMenu,setShowDraftMenu]=useState(false);
  const [showDraftDeleteConfirm,setShowDraftDeleteConfirm]=useState(false);
  const exercises=[...workout.exercises].sort((a,b)=>a.order-b.order);
  const updateWe=(id:string,patch:Partial<WorkoutExercise>)=>onChange({...workout,exercises:workout.exercises.map(x=>x.id===id?{...x,...patch}:x)});
+ const addCustomExercise=()=>{
+   const name=customExerciseName.trim(); if(!name)return;
+   const max=Math.max(0,...workout.exercises.map(x=>x.order));
+   const we:WorkoutExercise={id:uid(),exerciseId:`custom-${uid()}`,customName:name,order:max+1,skipped:false,loadType:'weight',sets:[]};
+   onChange({...workout,exercises:[...workout.exercises,we]}); setCustomExerciseName(''); setShowAdd(false); setCurrentId(we.id);
+ };
  const addOneShot=(exercise:Exercise)=>{
    const max=Math.max(0,...workout.exercises.map(x=>x.order));
    const we:WorkoutExercise={id:uid(),exerciseId:exercise.id,order:max+1,skipped:false,loadType:exercise.loadType==='bodyweight'?'bodyweight':'weight',sets:[]};
@@ -316,13 +323,13 @@ function WorkoutScreen({data,workout,editing,onChange,onFinish,onTimer,onHome,on
   }/>
   <div className="exercise-list">
    {exercises.map((we,idx)=>{
-    const ex=data.exercises.find(e=>e.id===we.exerciseId); if(!ex)return null;
+    const ex=data.exercises.find(e=>e.id===we.exerciseId) ?? (we.customName?{id:we.exerciseId,workoutTypeId:workout.typeId,name:we.customName,loadType:'weight' as LoadType,sortOrder:0,isActive:true}:null); if(!ex)return null;
     const open=currentId===we.id;
     return <ExerciseCard key={we.id} data={data} workout={workout} we={we} ex={ex} open={open} setOpen={()=>setCurrentId(we.id)} onUpdate={p=>updateWe(we.id,p)} onMove={d=>move(we.id,d)} onSkip={()=>skip(we.id)} onDelete={()=>removeExercise(we.id)} onTimer={onTimer} onClose={()=>setCurrentId(null)}/>;
    })}
   </div>
   <button className="secondary" onClick={()=>setShowAdd(true)}>+ Добавить упражнение</button>
-  {showAdd && <div className="modal-backdrop" onClick={()=>setShowAdd(false)}><div className="modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><h2>Добавить упражнение</h2><button className="icon-btn" onClick={()=>setShowAdd(false)}>×</button></div><div className="exercise-list">{data.exercises.filter(e=>e.isActive).map(e=><button className="card choice-card" key={e.id} disabled={workout.exercises.some(w=>w.exerciseId===e.id)} style={{opacity:workout.exercises.some(w=>w.exerciseId===e.id)?0.45:1}} onClick={()=>{if(workout.exercises.some(w=>w.exerciseId===e.id))return;addOneShot(e);setShowAdd(false);}}><span className="meta"><span className="choice-title">{e.name}</span><span className="choice-sub">{workoutTypeName(data,e.workoutTypeId)}</span></span><span className="chevron">›</span></button>)}</div></div></div>}
+  {showAdd && <div className="modal-backdrop" onClick={()=>setShowAdd(false)}><div className="modal add-exercise-modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><h2>Добавить упражнение</h2><button className="icon-btn" onClick={()=>setShowAdd(false)}>×</button></div><div className="custom-exercise-form"><label>Своё упражнение</label><div className="custom-exercise-row"><input className="input" autoFocus placeholder="Например, махи в кроссовере" value={customExerciseName} onChange={e=>setCustomExerciseName(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')addCustomExercise()}}/><button className="primary" disabled={!customExerciseName.trim()} onClick={addCustomExercise}>Добавить</button></div></div><div className="add-exercise-divider"><span>или выбери из шаблона</span></div><div className="exercise-list">{data.exercises.filter(e=>e.isActive).map(e=><button className="card choice-card" key={e.id} disabled={workout.exercises.some(w=>w.exerciseId===e.id)} style={{opacity:workout.exercises.some(w=>w.exerciseId===e.id)?0.45:1}} onClick={()=>{if(workout.exercises.some(w=>w.exerciseId===e.id))return;addOneShot(e);setShowAdd(false);}}><span className="meta"><span className="choice-title">{e.name}</span><span className="choice-sub">{workoutTypeName(data,e.workoutTypeId)}</span></span><span className="chevron">›</span></button>)}</div></div></div>}
   <div className="workout-finish-bar"><button className="primary" onClick={editing?saveEdit:finish}>{editing?'Сохранить изменения':'Завершить тренировку'}</button></div>
   {showMeta && <WorkoutMetaEditor data={data} workout={workout} onClose={()=>setShowMeta(false)} onSave={w=>{onChange(w);setShowMeta(false)}}/>}
   {showDraftDeleteConfirm&&<div className="modal-backdrop" onClick={()=>setShowDraftDeleteConfirm(false)}><div className="modal confirm-modal" onClick={e=>e.stopPropagation()}>
