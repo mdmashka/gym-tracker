@@ -449,12 +449,13 @@ function SummaryScreen({data}:{data:AppData}){
  const exportData={...data,workouts:completed};
  const exportXlsx=async()=>{try{const rows=buildExportRows(exportData);const ws=XLSX.utils.aoa_to_sheet(rows);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Тренировки');const bytes=XLSX.write(wb,{bookType:'xlsx',type:'array'});await shareOrDownloadFile(new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),'gym-log-'+(from||'all')+'-'+(to||todayISO())+'.xlsx');}catch(e){console.error(e);}};
  const exportCsv=async()=>{try{const rows=buildExportRows(exportData).map(r=>r.map(csvEscape).join(';')).join('\n');await shareOrDownloadFile(new Blob(['\uFEFF'+rows],{type:'text/csv;charset=utf-8'}),'gym-log-'+(from||'all')+'-'+(to||todayISO())+'.csv');}catch(e){console.error(e);}};
+ const exportPdf=async()=>{try{await exportWorkoutsPdf(exportData,from,to)}catch(e){console.error(e);}};
  return <div className="screen"><Top title="Прогресс" sub="История и рост рабочих весов"/>
   <div className="card progress-hero"><div className="progress-kicker">ТРЕНИРОВКИ</div><div className="progress-big">{completed.length}</div><div className="muted">завершённых тренировок</div></div>
   <div className="card"><div className="section-title"><h2>Упражнения</h2></div><select className="input progress-select" value={exercise} onChange={e=>setExercise(e.target.value)}><option value="all">Все упражнения</option>{active.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}</select></div>
   {selected?<ProgressExerciseCard stat={selected}/>:<div className="summary-group">{stats.filter(x=>x.points.length).slice(0,8).map(x=><ProgressExerciseCard key={x.ex.id} stat={x}/>)}</div>}
   <div className="card export-card"><div className="section-title"><h2>Выгрузка</h2></div><div className="muted export-period">Период выгрузки</div><DateRangePicker from={from} to={to} onChange={(a,b)=>{setFrom(a);setTo(b)}}/>
-   <div className="tool-row no-print" style={{marginTop:12}}><button className="tool" onClick={exportXlsx}><strong>Excel</strong><small>.xlsx</small></button><button className="tool" onClick={exportCsv}><strong>CSV</strong><small>.csv</small></button><button className="tool" onClick={()=>window.print()}><strong>PDF</strong><small>Печать</small></button></div>
+   <div className="tool-row no-print" style={{marginTop:12}}><button className="tool" onClick={exportXlsx}><strong>Excel</strong><small>.xlsx</small></button><button className="tool" onClick={exportCsv}><strong>CSV</strong><small>.csv</small></button><button className="tool" onClick={exportPdf}><strong>PDF</strong><small>.pdf</small></button></div>
   </div>
  </div>;
 }
@@ -477,6 +478,74 @@ function DateRangePicker({from,to,onChange}:{from:string;to:string;onChange:(fro
    <div className="month-grid range-calendar">{['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map(x=><div className="cal-day-name" key={x}>{x}</div>)}{cells}</div>
   </div></div>}
  </>;
+}
+async function exportWorkoutsPdf(data:AppData,from:string,to:string){
+ const workouts=data.workouts.filter(w=>w.status==='completed'&&(!from||w.date>=from)&&(!to||w.date<=to)).sort((a,b)=>a.date.localeCompare(b.date));
+ const W=1240,H=1754,M=78;
+ const pages:string[][]=[]; let lines:string[]=[];
+ const add=(s:string='')=>{lines.push(s)};
+ add('GYM TRACKER'); add('ТРЕНИРОВКИ'); add(from||to?`Период: ${from?formatDate(from):'все'} — ${to?formatDate(to):'сегодня'}`:'Весь период'); add('');
+ workouts.forEach(w=>{
+   add(`${formatDate(w.date)} · ${w.name||workoutTypeName(data,w.typeId)}`);
+   w.exercises.filter(we=>!we.skipped&&we.sets.length).forEach(we=>{
+     const ex=data.exercises.find(e=>e.id===we.exerciseId);
+     add(`  ${ex?.name||'Упражнение'}`);
+     we.sets.forEach((s,i)=>{
+       const body=(s.loadType??we.loadType??ex?.loadType)==='bodyweight';
+       add(`    ${i+1}. ${body?'Собственный вес':(s.weight!=null?`${formatWeight(s.weight)} кг`:'—')} × ${s.reps!=null?formatReps(s.reps):'—'}`);
+     });
+     if(we.notes) add(`    Заметка: ${we.notes}`);
+   });
+   add('');
+ });
+ if(!workouts.length) add('За выбранный период тренировок нет.');
+ const lineH=34, top=110, bottom=95, usable=Math.floor((H-top-bottom)/lineH);
+ for(let i=0;i<lines.length;i+=usable) pages.push(lines.slice(i,i+usable));
+ const pdfPages=pages.map(chunk=>makePdfPage(chunk,W,H,M));
+ const pdf=buildImagePdf(pdfPages,W,H);
+ await shareOrDownloadFile(pdf,'gym-log-'+(from||'all')+'-'+(to||todayISO())+'.pdf');
+}
+function makePdfPage(lines:string[],W:number,H:number,M:number){
+ const canvas=document.createElement('canvas'); canvas.width=W; canvas.height=H;
+ const ctx=canvas.getContext('2d'); if(!ctx) throw new Error('Canvas unavailable');
+ ctx.fillStyle='#ffffff';ctx.fillRect(0,0,W,H);ctx.fillStyle='#111111';
+ let y=90;
+ lines.forEach((line,i)=>{
+   const heading=i===0; ctx.font=heading?'800 34px Arial':'400 22px Arial';
+   ctx.fillStyle=heading?'#111111':'#333333';
+   ctx.fillText(line,M,y); y+=34;
+ });
+ return canvas.toDataURL('image/jpeg',0.9);
+}
+function buildImagePdf(images:string[],W:number,H:number){
+ const enc=new TextEncoder(); const objects:string[]=[]; const binaries:Uint8Array[]=[];
+ const addObj=(body:string)=>{objects.push(body);return objects.length};
+ const pagesId=addObj(''); const catalogId=addObj('');
+ const pageIds:number[]=[];
+ images.forEach((dataUrl)=>{
+   const b64=dataUrl.split(',')[1]; const bin=Uint8Array.from(atob(b64),c=>c.charCodeAt(0));
+   const imgId=addObj(`<< /Type /XObject /Subtype /Image /Width ${W} /Height ${H} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${bin.length} >>\nstream\n`);
+   binaries.push(bin);
+   const content=`q\n${W} 0 0 ${H} 0 0 cm\n/Im0 Do\nQ\n`;
+   const contentId=addObj(`<< /Length ${enc.encode(content).length} >>\nstream\n${content}endstream`);
+   const pageId=addObj(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /XObject << /Im0 ${imgId} 0 R >> >> /Contents ${contentId} 0 R >>`);
+   pageIds.push(pageId);
+ });
+ objects[pagesId-1]=`<< /Type /Pages /Kids [${pageIds.map(id=>id+' 0 R').join(' ')}] /Count ${pageIds.length} >>`;
+ objects[catalogId-1]=`<< /Type /Catalog /Pages ${pagesId} 0 R >>`;
+ const chunks:Uint8Array[]=[enc.encode('%PDF-1.4\n')]; const offsets:number[]=[0]; let offset=chunks[0].length; let binaryIndex=0;
+ objects.forEach((body,idx)=>{
+   const id=idx+1; const head=enc.encode(`${id} 0 obj\n`);
+   chunks.push(head); offset+=head.length; offsets[id]=offset;
+   if(binaries[binaryIndex]&&body.includes('/Subtype /Image')){const bin=binaries[binaryIndex++]; const pre=enc.encode(body); chunks.push(pre); offset+=pre.length; chunks.push(bin); offset+=bin.length; const tail=enc.encode('\nendstream\nendobj\n');chunks.push(tail);offset+=tail.length;}
+   else {const part=enc.encode(body+'\nendobj\n');chunks.push(part);offset+=part.length;}
+ });
+ const xrefOffset=offset; const xref=[enc.encode(`xref\n0 ${objects.length+1}\n0000000000 65535 f \n`)];
+ for(let i=1;i<=objects.length;i++) xref.push(enc.encode(String(offsets[i]).padStart(10,'0')+' 00000 n \n'));
+ xref.push(enc.encode(`trailer\n<< /Size ${objects.length+1} /Root ${catalogId} 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`));
+ chunks.push(...xref);
+ const total=chunks.reduce((n,x)=>n+x.length,0); const out=new Uint8Array(total); let p=0; chunks.forEach(x=>{out.set(x,p);p+=x.length});
+ return new Blob([out],{type:'application/pdf'});
 }
 async function shareOrDownloadFile(blob:Blob,filename:string){
  const file=new File([blob],filename,{type:blob.type});
