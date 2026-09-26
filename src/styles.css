@@ -757,9 +757,9 @@ html[data-app-theme="dark"] #root { background:#000!important; color:#f5f5f7!imp
 .splash-loader span:nth-child(2){animation-delay:.15s}.splash-loader span:nth-child(3){animation-delay:.3s}
 @keyframes splashDot{0%,80%,100%{opacity:.25;transform:scale(.75)}40%{opacity:1;transform:scale(1)}}
 .date-range-picker{display:grid;grid-template-columns:minmax(0,1fr) 28px minmax(0,1fr);align-items:center;gap:8px;margin-top:10px}
-.date-range-field{min-width:0;text-align:left;background:#f2f2f7;border-radius:15px;padding:11px 13px;min-height:66px;color:var(--tg-text-color,#111)}
-.date-range-field span{display:block;color:var(--tg-hint-color,#8e8e93);font-size:12px;font-weight:650;margin-bottom:5px}
-.date-range-field strong{display:block;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.date-range-field{min-width:0;text-align:left;background:#f2f2f7;border-radius:12px;padding:8px 11px;min-height:54px;color:#1c1c1e;border:1px solid rgba(0,0,0,.06)}
+.date-range-field span{display:block;color:#8e8e93;font-size:11px;font-weight:650;margin-bottom:3px}
+.date-range-field strong{display:block;color:#1c1c1e;font-size:14px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .date-range-field.active{box-shadow:0 0 0 2px var(--app-accent,#ff375f)}
 .date-range-arrow{text-align:center;color:var(--tg-hint-color,#8e8e93);font-weight:700}
 .date-clear{margin-top:8px;background:transparent;color:var(--app-accent,#ff375f);font-size:13px;font-weight:650}
