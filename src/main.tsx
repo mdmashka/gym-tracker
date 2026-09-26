@@ -17,7 +17,7 @@ function App(){
   const workoutBack=useRef<()=>void>(()=>{});
   const syncQueue=useRef<Promise<void>>(Promise.resolve());
 
-  useEffect(()=>{ initTelegram(); getAppData().then(next=>{const settings=next.settings ?? {restTimerSeconds:120,restTimerEnabled:true,theme:'dark',accentColor:'red'}; const demoResetKey='gym-tracker-demo-onboarding-reset-v1'; const shouldReplayOnboarding=localStorage.getItem(demoResetKey)!=='done'; if(shouldReplayOnboarding) localStorage.setItem(demoResetKey,'done'); setData({...next,settings,onboardingComplete:shouldReplayOnboarding?false:next.onboardingComplete}); ensureMenuButton().catch(()=>undefined)}).catch(e=>setError(String(e))).finally(()=>setLoading(false)); },[]);
+  useEffect(()=>{ initTelegram(); getAppData().then(next=>{const settings=next.settings ?? {restTimerSeconds:120,restTimerEnabled:true,theme:'dark',accentColor:'red'}; const demoResetKey='gym-tracker-demo-onboarding-reset-v2'; const shouldReplayOnboarding=localStorage.getItem(demoResetKey)!=='done'; setData({...next,settings,onboardingComplete:shouldReplayOnboarding?false:next.onboardingComplete}); ensureMenuButton().catch(()=>undefined)}).catch(e=>setError(String(e))).finally(()=>setLoading(false)); },[]);
   useEffect(()=>{
     const tg=getTelegram(); if(!tg) return;
     const handler=()=>workoutBack.current();
@@ -47,7 +47,7 @@ function App(){
 
   let body:React.ReactNode;
   if(screen.kind==='home' && !data.onboardingComplete) {
-    body=<Onboarding data={data} onComplete={(next)=>{commit({...next,onboardingComplete:true}).then(()=>{setScreen({kind:'home'});setShowWelcomeTour(true);});}}/>;
+    body=<Onboarding data={data} onComplete={(next)=>{localStorage.setItem('gym-tracker-demo-onboarding-reset-v2','done');commit({...next,onboardingComplete:true}).then(()=>{setScreen({kind:'home'});setShowWelcomeTour(true);});}}/>;
   } else if(screen.kind==='home') body=<Home data={data}
     onStart={(typeId)=>{const w=startWorkout(data,typeId);setScreen({kind:'workout',typeId,workoutId:w.id});commit({...data,workouts:[...data.workouts,w]});}}
     onContinue={(draft)=>{const ensured=ensureWorkoutExercises(draft,data);if(ensured!==draft)commit({...data,workouts:data.workouts.map(w=>w.id===draft.id?ensured:w)});setScreen({kind:'workout',typeId:draft.typeId,workoutId:draft.id});}}
