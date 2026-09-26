@@ -940,3 +940,5 @@ html[data-app-theme="dark"] #root { background:#000!important; color:#f5f5f7!imp
 .calendar-hint{margin:12px 2px 0;font-size:12px}
 .calendar-type-list{margin-top:14px}
 .calendar-type-list .choice-card{width:100%;text-align:left}
+
+.calendar-add-button{width:100%;margin-top:12px;min-height:46px;border:1px solid var(--app-border);border-radius:14px;background:var(--app-card);color:var(--app-accent);font-weight:700;font-size:14px}
