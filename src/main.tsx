@@ -263,7 +263,7 @@ function Home({data,onStart,onContinue,onNav,onCreate}:{data:AppData;onStart:(t:
    <div className="activity-stat-tile"><strong>{currentMonthCount}</strong><span>за месяц</span><div className={"activity-stat-delta "+(monthDelta>0?"up":monthDelta<0?"down":"same")}><b>{monthDelta>0?"↗":monthDelta<0?"↘":"→"}</b><span>{Math.abs(monthDelta)}</span></div></div>
   </div></section>
   {last&&<section className="home-section"><h2>Последняя тренировка</h2><button className="last-workout-card" onClick={()=>onNav({kind:'history',workoutId:last.id})}><span className="last-workout-icon">↗</span><span className="last-workout-info"><strong>{last.name||workoutTypeName(data,last.typeId)}</strong><span>{formatDate(last.date)} · {last.exercises.filter(x=>x.sets.length>0).length} упражнений</span></span><span className="last-workout-chevron">›</span></button></section>}
-  <section className="home-section"><h2>Активность</h2><div className="activity-card">
+  <section className="home-section"><h2>Календарь</h2><div className="activity-card">
    <div className="activity-head"><button type="button" className="activity-nav" onClick={()=>setMonth(new Date(y,m-1,1))}>‹</button><span>{month.toLocaleDateString('ru-RU',{month:'long',year:'numeric'})}</span><button type="button" className="activity-nav" onClick={()=>setMonth(new Date(y,m+1,1))}>›</button></div>
    <div className="activity-count">{monthWorkouts.length} {monthWorkouts.length===1?'тренировка':monthWorkouts.length>=2&&monthWorkouts.length<=4?'тренировки':'тренировок'}</div>
    <div className="activity-weekdays">{['П','В','С','Ч','П','С','В'].map((x,i)=><span key={i}>{x}</span>)}</div>
