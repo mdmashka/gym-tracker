@@ -404,17 +404,17 @@ function ExerciseCard({data,workout,we,ex,open,setOpen,onUpdate,onMove,onSkip,on
   <div className="exercise-head"><button style={{background:'transparent',color:'inherit',padding:0,textAlign:'left',cursor:'pointer'}} onClick={setOpen}><div className="exercise-name">{ex.name}</div><div className="muted" style={{fontSize:12,marginTop:3}}>{we.skipped?'Пропущено':we.sets.length+' подходов'}</div></button>
     <div className="exercise-actions"><button className="icon-btn" title="выше" onClick={()=>onMove(-1)}>↑</button><button className="icon-btn" title="ниже" onClick={()=>onMove(1)}>↓</button><button className="icon-btn" title="действия" onClick={()=>setMenu(v=>!v)}>•••</button>{menu&&<div className="exercise-menu"><button onClick={()=>{setOpen();setMenu(false)}}>Редактировать</button><button onClick={()=>{setPendingExerciseDelete(true);setMenu(false)}}>Удалить</button></div>}</div>
   </div>
-  {hist.length>0 && <div className="history-strip"><div className="history-date">Последние тренировки</div>{hist.map(h=><div key={h.workout.id} style={{marginBottom:4}}><strong style={{fontSize:13}}>{formatDate(h.workout.date)}</strong> <span className="muted" style={{fontSize:12}}>·</span> <span style={{fontSize:13}}>{h.workoutExercise.sets.map(s=>s.loadType==='bodyweight'?'Собственный вес × '+formatReps(s.reps):formatWeight(s.weight)+'×'+formatReps(s.reps)).join(' · ')}</span></div>)}</div>}
+  {hist.length>0 && <div className="history-strip"><div className="history-date">Последние тренировки</div>{hist.map(h=><div key={h.workout.id} style={{marginBottom:4}}><strong style={{fontSize:13}}>{formatDate(h.workout.date)}</strong> <span className="muted" style={{fontSize:12}}>·</span> <span style={{fontSize:13}}>{h.workoutExercise.sets.map(s=>s.loadType==='bodyweight'?'Без веса × '+formatReps(s.reps):formatWeight(s.weight)+'×'+formatReps(s.reps)).join(' · ')}</span></div>)}</div>}
   {open && !we.skipped && <>
     <div className="workout-load-picker">
       <div className="workout-load-title">Режим нагрузки</div>
       <div className="segmented compact">
         <button type="button" className={loadType==='weight'?'active':''} onClick={()=>changeLoadType('weight')}>С весом</button>
-        <button type="button" className={loadType==='bodyweight'?'active':''} onClick={()=>changeLoadType('bodyweight')}>Собственный вес</button>
+        <button type="button" className={loadType==='bodyweight'?'active':''} onClick={()=>changeLoadType('bodyweight')}>Без веса</button>
       </div>
     </div>
     {we.sets.length>0&&<div className="workout-load-note">Режим применяется к новым подходам. Сохранённые подходы сохраняют свой режим.</div>}
-    <div style={{marginTop:8}}>{we.sets.map(s=><div key={s.id} className="set-line"><span className="set-num">{s.order}</span><span>{s.loadType==='bodyweight'?'Собственный вес':formatWeight(s.weight)+' кг'}</span><span>{formatReps(s.reps)} повт.</span><button className="icon-btn" onClick={()=>setPendingSetDelete(s.id)}>×</button></div>)}</div>
+    <div style={{marginTop:8}}>{we.sets.map(s=><div key={s.id} className="set-line"><span className="set-num">{s.order}</span><span>{s.loadType==='bodyweight'?'Без веса':formatWeight(s.weight)+' кг'}</span><span>{formatReps(s.reps)} повт.</span><button className="icon-btn" onClick={()=>setPendingSetDelete(s.id)}>×</button></div>)}</div>
     {pendingSetDelete && <div className="modal-backdrop" onClick={()=>setPendingSetDelete(null)}><div className="modal confirm-modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><h2>Удалить подход?</h2><button className="icon-btn" onClick={()=>setPendingSetDelete(null)}>×</button></div><p className="muted">Этот подход будет удалён из тренировки.</p><div className="action-row" style={{marginTop:14}}><button className="secondary" onClick={()=>setPendingSetDelete(null)}>Отмена</button><button className="primary danger-button" onClick={()=>{onUpdate({sets:we.sets.filter(x=>x.id!==pendingSetDelete).map((x,i)=>({...x,order:i+1}))});setPendingSetDelete(null)}}>Удалить</button></div></div></div>}
     {pendingExerciseDelete && <div className="modal-backdrop" onClick={()=>setPendingExerciseDelete(false)}><div className="modal confirm-modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><h2>Удалить упражнение?</h2><button className="icon-btn" onClick={()=>setPendingExerciseDelete(false)}>×</button></div><p className="muted">Упражнение и все сохранённые подходы исчезнут из этой тренировки.</p><div className="action-row" style={{marginTop:14}}><button className="secondary" onClick={()=>setPendingExerciseDelete(false)}>Отмена</button><button className="primary danger-button" onClick={()=>{onDelete();setPendingExerciseDelete(false)}}>Удалить</button></div></div></div>}
     <div className="set-line" style={{gridTemplateColumns:'28px minmax(0,1fr) minmax(0,1fr) 36px',borderTop:we.sets.length?'1px solid rgba(128,128,128,.11)':'0'}}><span className="set-num">{we.sets.length+1}</span>{bodyweight?<span className="bodyweight-label">Собственный вес</span>:<input className="input" inputMode="decimal" placeholder="Вес" value={weight} onChange={e=>setWeight(e.target.value)}/>}<input className="input" inputMode="numeric" placeholder="Повторы" value={reps} onChange={e=>setReps(e.target.value)}/><button className="icon-btn" onClick={saveSet}>✓</button></div>
@@ -443,7 +443,7 @@ function HistoryScreen({data,workout,onEdit,onDuplicate,onRepeat,onDelete}:{data
  return <div className="screen"><Top title={workout.name || workoutTypeName(data,workout.typeId)} sub={formatLongDate(workout.date)}/>
   <div className="history-actions no-print"><button className="secondary" onClick={onEdit}>Редактировать</button><button className="secondary" onClick={onRepeat}>Повторить</button><button className="secondary" onClick={onDuplicate}>Дублировать</button><button className="secondary danger-outline" onClick={()=>setConfirm(true)}>Удалить</button></div>
   {confirm&&<div className="modal-backdrop" onClick={()=>setConfirm(false)}><div className="modal confirm-modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><h2>Удалить тренировку?</h2><button className="icon-btn" onClick={()=>setConfirm(false)}>×</button></div><p className="muted">Запись будет удалена из журнала.</p><div className="action-row" style={{marginTop:14}}><button className="secondary" onClick={()=>setConfirm(false)}>Отмена</button><button className="primary danger-button" onClick={()=>{onDelete();setConfirm(false)}}>Удалить</button></div></div></div>}
-  {[...workout.exercises].sort((a,b)=>a.order-b.order).filter(we=>we.sets.length>0).map(we=>{const ex=data.exercises.find(e=>e.id===we.exerciseId);if(!ex)return null;return <div className="card" key={we.id}><div className="exercise-name">{ex.name}</div>{we.sets.map(s=><div key={s.id} className="summary-row"><span>Подход {s.order}</span><span className="summary-result">{(s.loadType ?? we.loadType ?? ex.loadType)==='bodyweight'?'Собственный вес × '+formatReps(s.reps)+' повт.':formatWeight(s.weight)+' кг × '+formatReps(s.reps)}</span></div>)}{we.notes&&<div className="history-empty">{we.notes}</div>}</div>})}
+  {[...workout.exercises].sort((a,b)=>a.order-b.order).filter(we=>we.sets.length>0).map(we=>{const ex=data.exercises.find(e=>e.id===we.exerciseId);if(!ex)return null;return <div className="card" key={we.id}><div className="exercise-name">{ex.name}</div>{we.sets.map(s=><div key={s.id} className="summary-row"><span>Подход {s.order}</span><span className="summary-result">{(s.loadType ?? we.loadType ?? ex.loadType)==='bodyweight'?'Без веса × '+formatReps(s.reps)+' повт.':formatWeight(s.weight)+' кг × '+formatReps(s.reps)}</span></div>)}{we.notes&&<div className="history-empty">{we.notes}</div>}</div>})}
  </div>
 }
 function SummaryScreen({data}:{data:AppData}){
@@ -498,7 +498,7 @@ async function exportWorkoutsPdf(data:AppData,from:string,to:string){
      add(`  ${ex?.name||'Упражнение'}`);
      we.sets.forEach((s,i)=>{
        const body=(s.loadType??we.loadType??ex?.loadType)==='bodyweight';
-       add(`    ${i+1}. ${body?'Собственный вес':(s.weight!=null?`${formatWeight(s.weight)} кг`:'—')} × ${s.reps!=null?formatReps(s.reps):'—'}`);
+       add(`    ${i+1}. ${body?'Без веса':(s.weight!=null?`${formatWeight(s.weight)} кг`:'—')} × ${s.reps!=null?formatReps(s.reps):'—'}`);
      });
      if(we.notes) add(`    Заметка: ${we.notes}`);
    });
@@ -542,7 +542,8 @@ function buildImagePdf(images:string[],W:number,H:number){
  const chunks:Uint8Array[]=[enc.encode('%PDF-1.4\n')]; const offsets:number[]=[0]; let offset=chunks[0].length; let binaryIndex=0;
  objects.forEach((body,idx)=>{
    const id=idx+1; const head=enc.encode(`${id} 0 obj\n`);
-   chunks.push(head); offset+=head.length; offsets[id]=offset;
+   offsets[id]=offset;
+   chunks.push(head); offset+=head.length;
    if(binaries[binaryIndex]&&body.includes('/Subtype /Image')){const bin=binaries[binaryIndex++]; const pre=enc.encode(body); chunks.push(pre); offset+=pre.length; chunks.push(bin); offset+=bin.length; const tail=enc.encode('\nendstream\nendobj\n');chunks.push(tail);offset+=tail.length;}
    else {const part=enc.encode(body+'\nendobj\n');chunks.push(part);offset+=part.length;}
  });
