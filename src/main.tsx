@@ -51,7 +51,8 @@ function App(){
   } else if(screen.kind==='home') body=<Home data={data}
     onStart={(typeId)=>{const w=startWorkout(data,typeId);setScreen({kind:'workout',typeId,workoutId:w.id});commit({...data,workouts:[...data.workouts,w]});}}
     onContinue={(draft)=>{const ensured=ensureWorkoutExercises(draft,data);if(ensured!==draft)commit({...data,workouts:data.workouts.map(w=>w.id===draft.id?ensured:w)});setScreen({kind:'workout',typeId:draft.typeId,workoutId:draft.id});}}
-    onNav={setScreen}/>;
+    onNav={setScreen}
+    onCreate={(date,typeId)=>{const w=startWorkout(data,typeId);const dated={...w,date};commit({...data,workouts:[...data.workouts,dated]}).then(()=>setScreen({kind:'workout',typeId,workoutId:dated.id}));}}/>;
   if(screen.kind==='workout') {
     const w0=data.workouts.find(w=>w.id===screen.workoutId);
     body=w0?<WorkoutScreen data={data} workout={w0} editing={screen.mode==='edit'}
@@ -219,10 +220,10 @@ function AppIcon({kind}:{kind:'legs'|'arms'|'back'|'calendar'|'chart'|'settings'
 }
 
 function toISODate(d:Date){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
-function Home({data,onStart,onContinue,onNav}:{data:AppData;onStart:(t:WorkoutTypeId)=>void;onContinue:(w:Workout)=>void;onNav:(s:Screen)=>void}){
+function Home({data,onStart,onContinue,onNav,onCreate}:{data:AppData;onStart:(t:WorkoutTypeId)=>void;onContinue:(w:Workout)=>void;onNav:(s:Screen)=>void;onCreate:(date:string,typeId:WorkoutTypeId)=>void}){
  const today=todayISO(); const [showStart,setShowStart]=useState(false);
  const [month,setMonth]=useState(()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth(),1)});
- const [selectedDate,setSelectedDate]=useState<string|null>(null);
+ const [selectedDate,setSelectedDate]=useState<string|null>(null); const [createDate,setCreateDate]=useState<string|null>(null);
  const completed=data.workouts.filter(w=>w.status==='completed');
  const now=new Date(`${today}T12:00:00`); const monday=new Date(now); monday.setDate(monday.getDate()-((monday.getDay()+6)%7)); monday.setHours(0,0,0,0);
  const sunday=new Date(monday); sunday.setDate(monday.getDate()+7);
@@ -250,7 +251,7 @@ function Home({data,onStart,onContinue,onNav}:{data:AppData;onStart:(t:WorkoutTy
  for(let d=1;d<=days;d++){
    const date=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
    const dayWorkouts=byDate.get(date)??[];
-   cells.push(<button type="button" key={date} className={`activity-day ${dayWorkouts.length?'done':''} ${date===today?'current':''}`} onClick={()=>dayWorkouts.length&&setSelectedDate(date)}>{d}</button>);
+   cells.push(<button type="button" key={date} className={`activity-day ${dayWorkouts.length?'done':''} ${date===today?'current':''}`} onClick={()=>{if(dayWorkouts.length)setSelectedDate(date);else setCreateDate(date)}}>{d}</button>);
  }
  const iconForType=(typeId:WorkoutTypeId):'legs'|'arms'|'back' => typeId==='legs'?'legs':typeId==='arms'||typeId==='chest'?'arms':'back'; const startWorkout=(typeId:WorkoutTypeId)=>{haptic();setShowStart(false);onStart(typeId)};
  const selectedWorkouts=selectedDate?([...byDate.get(selectedDate)??[]].sort((a,b)=>(a.completedAt??'').localeCompare(b.completedAt??''))):[];
@@ -269,7 +270,8 @@ function Home({data,onStart,onContinue,onNav}:{data:AppData;onStart:(t:WorkoutTy
    <div className="activity-grid">{cells}</div>
   </div></section>
   <div className="home-tools"><button onClick={()=>onNav({kind:'summary'})}><span>Прогресс</span><small>Твои результаты</small><b>›</b></button><button onClick={()=>onNav({kind:'settings'})}><span>Настройки</span><small>Приложение</small><b>›</b></button></div>
-  {selectedDate&&<div className="modal-backdrop" onClick={()=>setSelectedDate(null)}><div className="modal start-modal date-workout-modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><h2>{formatLongDate(selectedDate)}</h2><button className="icon-btn" onClick={()=>setSelectedDate(null)}>×</button></div>{selectedWorkouts.map(w=><button key={w.id} className="start-option" onClick={()=>{setSelectedDate(null);onNav({kind:'history',workoutId:w.id})}}><span><strong>{w.name||workoutTypeName(data,w.typeId)}</strong><small>{w.exercises.filter(x=>x.sets.length>0).length} упражнений</small></span><b>›</b></button>)}</div></div>}
+  {selectedDate&&<div className="modal-backdrop" onClick={()=>setSelectedDate(null)}><div className="modal start-modal date-workout-modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><h2>{formatLongDate(selectedDate)}</h2><button type="button" className="icon-btn" onClick={()=>setSelectedDate(null)}>×</button></div>{selectedWorkouts.map(w=><button type="button" key={w.id} className="start-option" onClick={()=>{setSelectedDate(null);onNav({kind:'history',workoutId:w.id})}}><span><strong>{w.name||workoutTypeName(data,w.typeId)}</strong><small>{w.exercises.filter(x=>x.sets.length>0).length} упражнений</small></span><b>›</b></button>)}<button type="button" className="calendar-add-button" onClick={()=>{setSelectedDate(null);setCreateDate(selectedDate)}}>＋ Добавить тренировку на эту дату</button></div></div>}
+  {createDate&&<div className="modal-backdrop" onClick={()=>setCreateDate(null)}><div className="modal start-modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><h2>Новая тренировка</h2><button type="button" className="icon-btn" onClick={()=>setCreateDate(null)}>×</button></div><p className="muted">Выбери шаблон для {formatLongDate(createDate)}.</p><div className="start-options">{data.workoutTypes.map(t=><button type="button" className="start-option" key={t.id} onClick={()=>{onCreate(createDate,t.id);setCreateDate(null)}}><span><strong>{t.name}</strong><small>Новая тренировка</small></span><b>›</b></button>)}</div></div></div>}
   {showStart&&<div className="modal-backdrop" onClick={()=>setShowStart(false)}><div className="modal start-modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><h2>Новая тренировка</h2><button className="icon-btn" onClick={()=>setShowStart(false)}>×</button></div><div className="start-options">{data.workoutTypes.map(t=><button className="start-option" key={t.id} onClick={()=>startWorkout(t.id)}><span className={`start-option-icon start-${iconForType(t.id)}`}><AppIcon kind={iconForType(t.id)}/></span><span><strong>{t.name}</strong><small>{data.workoutTypes.length>1?'Тренировка':'Новая тренировка'}</small></span><b>›</b></button>)}</div></div></div>}
  </div>
 }
