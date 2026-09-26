@@ -867,3 +867,19 @@ html[data-app-theme="dark"] #root { background:#000!important; color:#f5f5f7!imp
   .workout-load-picker{align-items:center;flex-direction:row;gap:7px}
   .workout-load-picker .segmented{width:166px;max-width:166px}
 }
+
+/* Onboarding timer + first-run feature tour */
+.timer-choice-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px}
+.timer-choice{min-height:42px;border:1px solid var(--app-border);border-radius:12px;background:transparent;color:var(--app-text);font-size:13px;font-weight:650}
+.timer-choice.active{border-color:var(--app-accent);background:var(--app-accent-soft);color:var(--app-accent)}
+.welcome-tour-backdrop{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.48);backdrop-filter:blur(10px)}
+.welcome-tour{width:min(520px,100%);max-height:calc(100dvh - 40px);overflow:auto;background:var(--app-card);color:var(--app-text);border:1px solid var(--app-border);border-radius:28px;padding:25px 20px 20px;box-shadow:0 24px 80px rgba(0,0,0,.3)}
+.welcome-tour h1{font-size:31px;letter-spacing:-.04em;margin:0}
+.welcome-tour-lead{margin:8px 0 18px;color:var(--app-muted)}
+.welcome-tour-list{display:flex;flex-direction:column;border-top:1px solid var(--app-border)}
+.welcome-tour-list>div{padding:13px 0;border-bottom:1px solid var(--app-border);display:flex;flex-direction:column;gap:3px}
+.welcome-tour-list strong{font-size:15px}
+.welcome-tour-list span{font-size:12px;line-height:1.4;color:var(--app-muted)}
+.welcome-tour-note{font-size:12px;line-height:1.45;color:var(--app-muted);padding:15px 0}
+.welcome-tour>.primary{width:100%}
+@media(max-width:520px){.timer-choice-grid{grid-template-columns:repeat(5,minmax(0,1fr));gap:5px}.timer-choice{min-height:39px;font-size:12px}.welcome-tour{border-radius:24px;padding:22px 17px 17px}}
