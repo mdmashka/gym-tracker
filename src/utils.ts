@@ -81,9 +81,10 @@ export function buildExportRows(data:AppData) {
     const type=workoutTypeName(data,w.typeId);
     for(const we of [...w.exercises].sort((a,b)=>a.order-b.order)){
       const ex=data.exercises.find(e=>e.id===we.exerciseId);
-      if(!ex) continue;
-      if(we.skipped && !we.sets.length){ rows.push([w.date,type,ex.name,'','','',we.notes??'Пропущено']); continue; }
-      we.sets.forEach((s,i)=>rows.push([w.date,type,ex.name,String(i+1),formatWeight(s.weight),formatReps(s.reps),s.comment??'']));
+      const exerciseName=we.customName ?? ex?.name;
+      if(!exerciseName) continue;
+      if(we.skipped && !we.sets.length){ rows.push([w.date,type,exerciseName,'','','',we.notes??'Пропущено']); continue; }
+      we.sets.forEach((s,i)=>rows.push([w.date,type,exerciseName,String(i+1),formatWeight(s.weight),formatReps(s.reps),s.comment??'']));
     }
   }
   return rows;
