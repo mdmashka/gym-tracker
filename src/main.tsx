@@ -218,6 +218,7 @@ function AppIcon({kind}:{kind:'legs'|'arms'|'back'|'calendar'|'chart'|'settings'
  return <span className={'app-icon app-icon-'+kind} aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={paths[kind]}/></svg></span>
 }
 
+function toISODate(d:Date){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
 function Home({data,onStart,onContinue,onNav}:{data:AppData;onStart:(t:WorkoutTypeId)=>void;onContinue:(w:Workout)=>void;onNav:(s:Screen)=>void}){
  const today=todayISO(); const [showStart,setShowStart]=useState(false);
  const [month,setMonth]=useState(()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth(),1)});
@@ -228,6 +229,16 @@ function Home({data,onStart,onContinue,onNav}:{data:AppData;onStart:(t:WorkoutTy
  const weekCompleted=completed.filter(w=>{const d=new Date(`${w.date}T12:00:00`);return d>=monday&&d<sunday});
  const weekCount=Array.from(new Map(weekCompleted.map(w=>[w.id,w])).values()).length;
  const last=[...completed].sort((a,b)=>(b.completedAt??b.date).localeCompare(a.completedAt??a.date))[0];
+ const previousMonday=new Date(monday); previousMonday.setDate(previousMonday.getDate()-7);
+ const previousWeekCompleted=completed.filter(w=>{const d=new Date(`${w.date}T12:00:00`);return d>=previousMonday&&d<monday});
+ const previousWeekCount=Array.from(new Map(previousWeekCompleted.map(w=>[w.id,w])).values()).length;
+ const weekDelta=weekCount-previousWeekCount;
+ const currentMonthStart=new Date(now.getFullYear(),now.getMonth(),1);
+ const previousMonthStart=new Date(now.getFullYear(),now.getMonth()-1,1);
+ const nextMonthStart=new Date(now.getFullYear(),now.getMonth()+1,1);
+ const currentMonthCount=completed.filter(w=>w.date>=toISODate(currentMonthStart)&&w.date<toISODate(nextMonthStart)).length;
+ const previousMonthCount=completed.filter(w=>w.date>=toISODate(previousMonthStart)&&w.date<toISODate(currentMonthStart)).length;
+ const monthDelta=currentMonthCount-previousMonthCount;
  const drafts=data.workouts.filter(w=>w.status==='draft').sort((a,b)=>(b.updatedAt??b.createdAt).localeCompare(a.updatedAt??a.createdAt)); const draft=drafts[0];
  const y=month.getFullYear(), m=month.getMonth();
  const first=new Date(y,m,1), start=(first.getDay()+6)%7, days=new Date(y,m+1,0).getDate();
@@ -246,7 +257,10 @@ function Home({data,onStart,onContinue,onNav}:{data:AppData;onStart:(t:WorkoutTy
  return <div className="screen home-screen">
   <div className="home-hero"><div className="home-eyebrow">ТРЕНИРОВКИ</div><h1>Сегодня</h1><div className="home-date">{new Date(`${today}T12:00:00`).toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long'})}</div><button className="home-start primary" onClick={()=>{haptic();draft?onContinue(draft):setShowStart(true)}}>{draft?'Продолжить тренировку':'Начать тренировку'}</button>
   {draft&&<div className="draft-preview" onClick={()=>onContinue(draft)}><div><strong>{workoutTypeName(data,draft.typeId)}</strong><span>{draft.name||'Черновик тренировки'}</span></div><div className="draft-time">изменено {formatDraftTime(draft.updatedAt??draft.createdAt)}<b>›</b></div></div>}</div>
-  <section className="home-section"><h2>Твоя неделя</h2><div className="week-card week-card-single"><div className="week-stat"><strong>{weekCount}</strong><span>{weekCount===1?'тренировка':weekCount>=2&&weekCount<=4?'тренировки':'тренировок'}</span></div></div></section>
+  <section className="home-section"><h2>Твоя активность</h2><div className="week-card activity-stats-grid">
+   <div className="activity-stat-tile"><strong>{weekCount}</strong><span>за неделю</span><div className={"activity-stat-delta "+(weekDelta>0?"up":weekDelta<0?"down":"same")}><b>{weekDelta>0?"↗":weekDelta<0?"↘":"→"}</b><span>{Math.abs(weekDelta)}</span></div></div>
+   <div className="activity-stat-tile"><strong>{currentMonthCount}</strong><span>за месяц</span><div className={"activity-stat-delta "+(monthDelta>0?"up":monthDelta<0?"down":"same")}><b>{monthDelta>0?"↗":monthDelta<0?"↘":"→"}</b><span>{Math.abs(monthDelta)}</span></div></div>
+  </div></section>
   {last&&<section className="home-section"><h2>Последняя тренировка</h2><button className="last-workout-card" onClick={()=>onNav({kind:'history',workoutId:last.id})}><span className="last-workout-icon">↗</span><span className="last-workout-info"><strong>{last.name||workoutTypeName(data,last.typeId)}</strong><span>{formatDate(last.date)} · {last.exercises.filter(x=>x.sets.length>0).length} упражнений</span></span><span className="last-workout-chevron">›</span></button></section>}
   <section className="home-section"><h2>Активность</h2><div className="activity-card">
    <div className="activity-head"><button type="button" className="activity-nav" onClick={()=>setMonth(new Date(y,m-1,1))}>‹</button><span>{month.toLocaleDateString('ru-RU',{month:'long',year:'numeric'})}</span><button type="button" className="activity-nav" onClick={()=>setMonth(new Date(y,m+1,1))}>›</button></div>
