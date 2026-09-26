@@ -914,3 +914,14 @@ html[data-app-theme="dark"] #root { background:#000!important; color:#f5f5f7!imp
  .activity-stat-tile strong{font-size:42px}
  .activity-stat-delta{left:17px;bottom:15px}
 }
+
+/* Custom workout exercise */
+.custom-exercise-form{padding:4px 0 2px}
+.custom-exercise-form>label{display:block;font-size:12px;color:var(--app-muted);font-weight:650;margin-bottom:7px}
+.custom-exercise-row{display:flex;gap:8px;align-items:center}
+.custom-exercise-row .input{min-width:0;flex:1}
+.custom-exercise-row .primary{flex:0 0 auto;min-height:44px;padding:0 15px}
+.add-exercise-divider{display:flex;align-items:center;gap:10px;margin:18px 0 10px;color:var(--app-muted);font-size:12px}
+.add-exercise-divider:before,.add-exercise-divider:after{content:"";height:1px;background:var(--app-border);flex:1}
+.bodyweight-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;font-size:13px;color:var(--app-muted);padding:0 8px}
+.set-line .bodyweight-label{width:auto}
