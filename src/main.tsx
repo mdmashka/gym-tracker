@@ -13,6 +13,7 @@ function App(){
   const [timer,setTimer]=useState<{until:number}|null>(null);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState<string|null>(null);
+  const [showWelcomeTour,setShowWelcomeTour]=useState(false);
   const workoutBack=useRef<()=>void>(()=>{});
   const syncQueue=useRef<Promise<void>>(Promise.resolve());
 
@@ -46,7 +47,7 @@ function App(){
 
   let body:React.ReactNode;
   if(screen.kind==='home' && !data.onboardingComplete) {
-    body=<Onboarding data={data} onComplete={(next)=>{commit({...next,onboardingComplete:true}).then(()=>setScreen({kind:'home'}));}}/>;
+    body=<Onboarding data={data} onComplete={(next)=>{commit({...next,onboardingComplete:true}).then(()=>{setScreen({kind:'home'});setShowWelcomeTour(true);});}}/>;
   } else if(screen.kind==='home') body=<Home data={data}
     onStart={(typeId)=>{const w=startWorkout(data,typeId);setScreen({kind:'workout',typeId,workoutId:w.id});commit({...data,workouts:[...data.workouts,w]});}}
     onContinue={(draft)=>{const ensured=ensureWorkoutExercises(draft,data);if(ensured!==draft)commit({...data,workouts:data.workouts.map(w=>w.id===draft.id?ensured:w)});setScreen({kind:'workout',typeId:draft.typeId,workoutId:draft.id});}}
@@ -76,7 +77,7 @@ function App(){
   if(screen.kind==='summary') body=<SummaryScreen data={data}/>;
   if(screen.kind==='settings') body=<SettingsScreen data={data} onChange={commit}/>;
   const appSettings=data.settings ?? {restTimerSeconds:120,restTimerEnabled:true,theme:'dark',accentColor:'red'};
-  return <div className={`app theme-${appSettings.theme} accent-${appSettings.accentColor}`}>{error && <div className="notice no-print">{error}</div>}{body}{timer && <RestTimer timer={timer} onClose={()=>setTimer(null)}/>}</div>;
+  return <div className={`app theme-${appSettings.theme} accent-${appSettings.accentColor}`}>{error && <div className="notice no-print">{error}</div>}{body}{timer && <RestTimer timer={timer} onClose={()=>setTimer(null)}/>} {showWelcomeTour && <WelcomeTour onClose={()=>setShowWelcomeTour(false)}/>}</div>;
 }
 
 
@@ -101,6 +102,8 @@ function Onboarding({data,onComplete}:{data:AppData;onComplete:(next:AppData)=>v
  const [custom,setCustom]=useState('');
  const [theme,setTheme]=useState<'light'|'dark'>(data.settings?.theme ?? 'dark');
  const [accentColor,setAccentColor]=useState(data.settings?.accentColor ?? 'red');
+ const [timerEnabled,setTimerEnabled]=useState(data.settings?.restTimerEnabled ?? true);
+ const [timerSeconds,setTimerSeconds]=useState(data.settings?.restTimerSeconds ?? 120);
 
  useEffect(()=>{
    const root=document.documentElement;
@@ -142,7 +145,7 @@ function Onboarding({data,onComplete}:{data:AppData;onComplete:(next:AppData)=>v
    const workoutTypes=templates.map(t=>({id:t.id,name:t.name,slug:t.slug}));
    const exercises:Exercise[]=[];
    templates.forEach(t=>(chosen[t.id]??[]).forEach((name,i)=>exercises.push({id:uid(),workoutTypeId:t.id,name,loadType:'weight',sortOrder:i+1,isActive:true})));
-   onComplete({...data,workoutTypes,exercises,workouts:[],onboardingComplete:true,settings:{restTimerSeconds:data.settings?.restTimerSeconds ?? 120,restTimerEnabled:data.settings?.restTimerEnabled ?? true,theme,accentColor}});
+   onComplete({...data,workoutTypes,exercises,workouts:[],onboardingComplete:true,settings:{restTimerSeconds:timerSeconds,restTimerEnabled:timerEnabled,theme,accentColor}});
  };
  if(step===1)return <div className="onboarding screen">
    <div className="onboarding-hero"><div className="onboarding-kicker">GYM TRACKER</div><h1>Настроим тренировки</h1><p>Выберите готовые шаблоны тренировочных дней или создайте свои. Один шаблон — один отдельный тренировочный день.</p></div>
@@ -152,27 +155,54 @@ function Onboarding({data,onComplete}:{data:AppData;onComplete:(next:AppData)=>v
    <div className="onboarding-hint">Например, «Ноги + ягодицы» можно сделать одним шаблоном вместо двух. Шаблоны и их названия можно изменить позже в настройках.</div>
    <button className="primary onboarding-next" disabled={!selected.length} onClick={()=>{setCurrent(0);setChosen(Object.fromEntries(templates.map(t=>[t.id,t.exercises.slice(0,2)])));setStep(2)}}>Далее</button>
  </div>;
- if(step===2&&!currentTemplate)return null;
  if(step===2)return <div className="onboarding screen">
-   <div className="onboarding-progress"><span>ШАГ 2 · УПРАЖНЕНИЯ</span><b>{current+1} / {templates.length}</b></div>
+   <div className="onboarding-progress"><span>ШАГ 2 · ТАЙМЕР</span><b>Настройка</b></div>
+   <div className="onboarding-hero"><div className="onboarding-kicker">ТАЙМЕР ОТДЫХА</div><h1>Нужен таймер между подходами?</h1><p>После сохранения подхода таймер будет запускаться автоматически. Настройку можно изменить в любой момент.</p></div>
+   <div className="onboarding-settings-card">
+     <div className="onboarding-setting-row"><div><strong>Таймер отдыха</strong><span>{timerEnabled?'Запускать после каждого подхода':'Не использовать таймер'}</span></div><button className={'ios-switch '+(timerEnabled?'on':'')} aria-label="Таймер отдыха" onClick={()=>setTimerEnabled(v=>!v)}><span/></button></div>
+     {timerEnabled&&<div className="onboarding-setting-block"><strong>Длительность</strong><div className="timer-choice-grid">{Array.from({length:10},(_,i)=>(i+1)*30).map(s=><button key={s} className={'timer-choice '+(timerSeconds===s?'active':'')} onClick={()=>setTimerSeconds(s)}>{Math.floor(s/60)}:{String(s%60).padStart(2,'0')}</button>)}</div><div className="onboarding-hint" style={{padding:'9px 0 0'}}>Шаг 30 секунд</div></div>}
+   </div>
+   <div className="onboarding-hint">Позже таймер можно включить или отключить и изменить длительность в настройках.</div>
+   <div className="onboarding-actions"><button className="secondary" onClick={()=>setStep(1)}>Назад</button><button className="primary" onClick={()=>{setCurrent(0);setStep(3)}}>Далее</button></div>
+ </div>;
+ if(step===3&&!currentTemplate)return null;
+ if(step===3)return <div className="onboarding screen">
+   <div className="onboarding-progress"><span>ШАГ 3 · УПРАЖНЕНИЯ</span><b>{current+1} / {templates.length}</b></div>
    <div className="onboarding-hero"><div className="onboarding-kicker">{currentTemplate.name}</div><h1>Соберите шаблон</h1><p>Выберите упражнения, которые хотите видеть в этом тренировочном дне.</p></div>
    {currentTemplate.exercises.length>0&&<div className="onboarding-options">{currentTemplate.exercises.map(name=><button key={name} className={'onboarding-exercise '+((chosen[currentTemplate.id]??[]).includes(name)?'selected':'')} onClick={()=>toggleExercise(name)}><span>{name}</span><i>✓</i></button>)}</div>}
    <div className="custom-exercise-box"><div className="settings-section-title">СВОЁ УПРАЖНЕНИЕ</div><div className="form-grid"><input className="input" value={custom} onChange={e=>setCustom(e.target.value)} placeholder="Название упражнения"/><button className="secondary" onClick={addCustom}>Добавить в шаблон</button></div></div>
    {(chosen[currentTemplate.id]??[]).length>0&&<div className="onboarding-selected-exercises"><div className="settings-section-title">В ШАБЛОНЕ</div>{(chosen[currentTemplate.id]??[]).map((name,i)=><div className="onboarding-selected-row" key={name+i}><span>{name}</span><button onClick={()=>setChosen(v=>({...v,[currentTemplate.id]:(v[currentTemplate.id]??[]).filter((_,idx)=>idx!==i)}))}>×</button></div>)}</div>}
    <div className="onboarding-hint">Эти упражнения можно изменить позже в настройках.</div>
-   <div className="onboarding-actions"><button className="secondary" disabled={current===0} onClick={()=>setCurrent(v=>v-1)}>Назад</button>{current<templates.length-1?<button className="primary" onClick={()=>setCurrent(v=>v+1)}>Следующая тренировка</button>:<button className="primary" onClick={()=>setStep(3)}>Далее</button>}</div>
+   <div className="onboarding-actions"><button className="secondary" disabled={current===0} onClick={()=>setCurrent(v=>v-1)}>Назад</button>{current<templates.length-1?<button className="primary" onClick={()=>setCurrent(v=>v+1)}>Следующая тренировка</button>:<button className="primary" onClick={()=>setStep(4)}>Далее</button>}</div>
  </div>;
  const accentOptions=[['red','Красный','#ff375f'],['purple','Фиолетовый','#af52de'],['blue','Синий','#0a84ff'],['teal','Бирюзовый','#14b8a6'],['green','Зелёный','#30d158'],['orange','Оранжевый','#ff9f0a'],['yellow','Жёлтый','#ffd60a']] as const;
  return <div className="onboarding screen">
-   <div className="onboarding-progress"><span>ШАГ 3 · ОФОРМЛЕНИЕ</span><b>Готово</b></div>
+   <div className="onboarding-progress"><span>ШАГ 4 · ОФОРМЛЕНИЕ</span><b>Готово</b></div>
    <div className="onboarding-hero"><div className="onboarding-kicker">ОФОРМЛЕНИЕ</div><h1>Настройте приложение</h1><p>Выберите тему и акцентный цвет.</p></div>
    <div className="onboarding-settings-card">
      <div className="onboarding-setting-row"><div><strong>Тема</strong><span>Светлая или тёмная</span></div><div className="segmented compact"><button className={theme==='light'?'active':''} onClick={()=>setTheme('light')}>Белая</button><button className={theme==='dark'?'active':''} onClick={()=>setTheme('dark')}>Чёрная</button></div></div>
      <div className="onboarding-setting-block"><strong>Акцентный цвет</strong><div className="accent-options">{accentOptions.map(([id,name,color])=><button key={id} title={name} aria-label={name} className={'accent-swatch '+(accentColor===id?'selected':'')} style={{'--swatch':color} as React.CSSProperties} onClick={()=>setAccentColor(id)}><span/></button>)}</div></div>
    </div>
    <div className="onboarding-hint">Тему и акцентный цвет можно изменить позже в настройках.</div>
-   <div className="onboarding-actions"><button className="secondary" onClick={()=>setStep(2)}>Назад</button><button className="primary" onClick={finish}>Начать</button></div>
+   <div className="onboarding-actions"><button className="secondary" onClick={()=>setStep(3)}>Назад</button><button className="primary" onClick={finish}>Начать</button></div>
  </div>;
+}
+function WelcomeTour({onClose}:{onClose:()=>void}){
+ return <div className="welcome-tour-backdrop">
+  <div className="welcome-tour" role="dialog" aria-modal="true">
+   <div className="onboarding-kicker">GYM TRACKER</div>
+   <h1>Готово. Поехали.</h1>
+   <p className="welcome-tour-lead">Коротко о том, где что находится.</p>
+   <div className="welcome-tour-list">
+    <div><strong>Тренировки</strong><span>Создавайте, продолжайте и редактируйте тренировочные дни.</span></div>
+    <div><strong>Календарь</strong><span>Открывайте любую прошлую тренировку по дате.</span></div>
+    <div><strong>Прогресс</strong><span>Смотрите историю, лучшие результаты и выгружайте данные в Excel, CSV или PDF.</span></div>
+    <div><strong>Настройки</strong><span>Меняйте шаблоны, упражнения, нагрузку, таймер, тему и акцент.</span></div>
+   </div>
+   <div className="welcome-tour-note">Записывай подходы — приложение сохранит историю. Остальное можно настроить по ходу.</div>
+   <button className="primary" onClick={onClose}>Начать</button>
+  </div>
+ </div>
 }
 function Top({title,sub,action}:{title:string;sub?:string;action?:React.ReactNode}){ return <div className="topbar"><div><div className="eyebrow">GYM LOG</div><h1>{title}</h1>{sub&&<div className="muted" style={{marginTop:5}}>{sub}</div>}</div>{action}</div> }
 
