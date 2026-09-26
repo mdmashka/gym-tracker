@@ -136,7 +136,7 @@ h2 { font-size:22px; letter-spacing:-.02em; }
 .mini-chart{height:112px;display:flex;align-items:flex-end;gap:5px;padding:14px 2px 4px;border-bottom:1px solid #eee}.chart-col{height:100%;flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:3px;min-width:0}.chart-bar{width:100%;max-width:22px;border-radius:7px 7px 3px 3px;background:linear-gradient(to top,#ff375f,#ff8ca3);min-height:8px}.chart-col span{font-size:9px;color:#8e8e93;white-space:nowrap}
 .export-period{font-size:12px;margin-top:4px}.menu-row{display:block;width:100%;text-align:left;padding:12px;border-radius:11px;background:transparent;color:inherit;font-weight:600}.menu-row:active{background:#f2f2f7}.menu-row.danger{color:#ff3b30}
 .settings-group{padding:16px}.timer-setting{border-top:0;margin-top:6px;padding-bottom:2px}.timer-setting strong{font-size:14px}.timer-setting .muted{font-size:11px;margin-top:3px}.danger-button{background:#ff3b30!important;box-shadow:none!important}
-@media(max-width:520px){.tool-row{grid-template-columns:1fr 1fr}.tool:last-child{grid-column:span 2}.record-badge strong{font-size:11px}}
+@media(max-width:520px){.tool-row{grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.tool{min-width:0;padding:9px}.tool strong{font-size:13px}.tool small{font-size:10px}.record-badge strong{font-size:11px}}
 
 
 /* HOME — dark Apple-style layout */
