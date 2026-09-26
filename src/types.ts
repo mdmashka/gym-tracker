@@ -29,6 +29,7 @@ export interface SetEntry {
 export interface WorkoutExercise {
   id: string;
   exerciseId: string;
+  customName?: string;
   order: number;
   skipped: boolean;
   loadType?: 'weight' | 'bodyweight';
