@@ -29,7 +29,19 @@ function App(){
   },[screen]);
 
   const commit=async(next:AppData)=>{ setData(next); try{await saveRemoteData(next);}catch(e){setError(`Не удалось синхронизировать: ${String(e)}`);} };
-  if(loading) return <div className="app"><div className="card">Загрузка…</div></div>;
+  if(loading) return <div className="splash-screen" role="status" aria-label="Загрузка приложения">
+    <div className="splash-glow" aria-hidden="true"></div>
+    <div className="splash-glass-icon" aria-hidden="true">
+      <svg viewBox="0 0 120 120" className="splash-dumbbell" role="img" aria-label="">
+        <rect x="15" y="48" width="90" height="24" rx="7" fill="currentColor" opacity=".96"/>
+        <rect x="25" y="31" width="17" height="58" rx="7" fill="currentColor"/>
+        <rect x="78" y="31" width="17" height="58" rx="7" fill="currentColor"/>
+        <rect x="8" y="43" width="12" height="34" rx="5" fill="currentColor" opacity=".88"/>
+        <rect x="100" y="43" width="12" height="34" rx="5" fill="currentColor" opacity=".88"/>
+      </svg>
+    </div>
+    <div className="splash-progress" aria-hidden="true"><span></span></div>
+  </div>;
   if(!data) return <div className="app"><div className="card"><h2>Не удалось открыть журнал</h2><p className="muted">{error}</p></div></div>;
 
   let body:React.ReactNode;
