@@ -570,6 +570,7 @@ function ProgressExerciseCard({stat}:{stat:{ex:Exercise;points:Array<{date:strin
 }
 function SettingsScreen({data,onChange}:{data:AppData;onChange:(d:AppData)=>Promise<void>|void}){
  const [addName,setAddName]=useState('');
+ const [newTemplateName,setNewTemplateName]=useState('');
  const [target,setTarget]=useState<WorkoutTypeId>(data.workoutTypes[0]?.id ?? '');
  const [draggingId,setDraggingId]=useState<string|null>(null);
  const [dirty,setDirty]=useState(false);
@@ -584,6 +585,23 @@ function SettingsScreen({data,onChange}:{data:AppData;onChange:(d:AppData)=>Prom
  },[data.exercises,target,dirty]);
 
  const updateSettings=(patch:Partial<typeof settings>)=>onChange({...data,settings:{...settings,...patch}});
+ const createTemplate=async()=>{
+   const name=newTemplateName.trim();
+   if(!name||data.workoutTypes.some(t=>t.name.trim().toLowerCase()===name.toLowerCase()))return;
+   const id='custom-'+uid();
+   const next={...data,workoutTypes:[...data.workoutTypes,{id,name,slug:name.toLowerCase().replace(/[^a-zа-я0-9]+/gi,'-').replace(/^-|-$/g,'')}]};
+   await onChange(next);setTarget(id);setDraftExercises([]);setDirty(false);setNewTemplateName('');
+ };
+ const deleteTemplate=async(id:WorkoutTypeId)=>{
+   const type=data.workoutTypes.find(t=>t.id===id);if(!type)return;
+   if(!window.confirm('Удалить шаблон «'+type.name+'»? Уже сохранённые тренировки останутся в истории.'))return;
+   const usedIds=new Set(data.workouts.flatMap(w=>w.exercises.map(we=>we.exerciseId)));
+   const nextTypes=data.workoutTypes.filter(t=>t.id!==id);
+   const nextExercises=data.exercises.filter(e=>e.workoutTypeId!==id||usedIds.has(e.id));
+   await onChange({...data,workoutTypes:nextTypes,exercises:nextExercises});
+   const nextTarget=nextTypes[0]?.id??'';
+   setTarget(nextTarget);setDraftExercises(nextExercises.filter(e=>e.workoutTypeId===nextTarget&&e.isActive).sort((a,b)=>a.sortOrder-b.sortOrder));setDirty(false);
+ };
 
  const saveTemplate=async()=>{
    const existingById=new Map(data.exercises.map(e=>[e.id,e]));
@@ -700,6 +718,8 @@ function SettingsScreen({data,onChange}:{data:AppData;onChange:(d:AppData)=>Prom
   <div className="card">
    <div className="settings-section-title">УПРАЖНЕНИЯ</div>
    <div className="segmented">{data.workoutTypes.map(t=><button key={t.id} className={target===t.id?'active':''} onClick={()=>switchTemplate(t.id)}>{t.name}</button>)}</div>
+   <div className="settings-add-exercise"><div className="exercise-name">Новый шаблон</div><div className="form-grid" style={{marginTop:10}}><input className="input" value={newTemplateName} onChange={e=>setNewTemplateName(e.target.value)} placeholder="Например, Верх тела"/><button className="secondary" disabled={!newTemplateName.trim()||data.workoutTypes.some(t=>t.name.trim().toLowerCase()===newTemplateName.trim().toLowerCase())} onClick={()=>void createTemplate()}>Добавить шаблон</button></div></div>
+   <div className="settings-template-delete"><button className="settings-delete" disabled={data.workoutTypes.length<=1} aria-label="Удалить текущий шаблон" onClick={()=>void deleteTemplate(target)}>Удалить шаблон «{data.workoutTypes.find(t=>t.id===target)?.name??''}»</button></div>
    <div className="settings-list">
     {draftExercises.map(ex=><div className={'settings-item '+(draggingId===ex.id?'is-dragging':'')} data-id={ex.id} key={ex.id} onPointerDown={e=>startDrag(ex.id,e)} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}>
       <span className="settings-drag-hint" aria-hidden="true">≡</span>
