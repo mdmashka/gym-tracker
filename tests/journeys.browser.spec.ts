@@ -69,3 +69,27 @@ test('mobile template editor distinguishes delete and recovers after deleting th
   expect(saved.workouts[0].exercises).toEqual(data.workouts[0].exercises);
   expect(saved.workoutTypes[0].name).toBe('Новый шаблон');
 });
+
+test('design rollback survives reload without changing journals or pending edits', async ({ page }) => {
+  const data = journal();
+  await page.addInitScript(value => {
+    if (!localStorage.getItem('gym-log:data:v2:browser-demo')) localStorage.setItem('gym-log:data:v2:browser-demo', JSON.stringify(value));
+  }, data);
+  await page.goto('/');
+  await expect(page.locator('html')).toHaveAttribute('data-ui-design', 'apple');
+  await expect(page.locator('html')).toHaveAttribute('data-ui-tone', 'light');
+  const before = await page.evaluate(() => localStorage.getItem('gym-log:data:v2:browser-demo'));
+  await page.getByRole('button', { name: /Настройки/ }).click();
+  await page.getByRole('button', { name: 'Тёмная', exact: true }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-ui-tone', 'dark');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.getByRole('button', { name: 'Классический', exact: true }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-ui-design', 'classic');
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-ui-design', 'classic');
+  await page.getByRole('button', { name: /Настройки/ }).click();
+  await page.getByRole('button', { name: 'Новый', exact: true }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-ui-design', 'apple');
+  expect(await page.evaluate(() => localStorage.getItem('gym-log:data:v2:browser-demo'))).toBe(before);
+  expect(await page.evaluate(() => localStorage.getItem('gym-log:data:v2:browser-demo:pending'))).toBe(null);
+});

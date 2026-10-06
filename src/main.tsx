@@ -6,6 +6,8 @@ import { completeOnboarding, needsOnboarding, exerciseName, saveTemplateExercise
 import { formatDate, formatLongDate, formatReps, formatWeight, latestTwoExecutions, startWorkout, todayISO, uid, workoutTypeName, csvEscape, buildExportRows, downloadText } from './utils';
 import { getTelegram, haptic, initTelegram } from './telegram';
 import './styles.css';
+import { DesignPreferences } from './DesignPreferences';
+import { applyAppearance, readAppearance } from './appearance';
 
 export function App(){
   const [data,setData]=useState<AppData|null>(null);
@@ -28,7 +30,7 @@ export function App(){
     const handler=()=>workoutBack.current();
     tg.BackButton.onClick(handler); return ()=>tg.BackButton.offClick(handler);
   },[]);
-  useEffect(()=>{if(!data)return;const s=data.settings ?? {restTimerSeconds:120,restTimerEnabled:true,theme:'dark',accentColor:'red'};document.documentElement.dataset.appTheme=s.theme;document.documentElement.dataset.appAccent=s.accentColor;document.documentElement.style.setProperty('--tg-bg-color',s.theme==='dark'?'#000':'#f2f2f7');document.documentElement.style.setProperty('--tg-secondary-bg-color',s.theme==='dark'?'#2c2c2e':'#fff');document.documentElement.style.setProperty('--tg-text-color',s.theme==='dark'?'#f5f5f7':'#111');document.documentElement.style.setProperty('--tg-hint-color',s.theme==='dark'?'#a1a1a6':'#8e8e93');const meta=document.querySelector('meta[name="theme-color"]');if(meta)meta.setAttribute('content',s.theme==='dark'?'#000000':'#f2f2f7');},[data?.settings?.theme,data?.settings?.accentColor]);
+  useEffect(()=>{if(!data)return;const s=data.settings ?? {restTimerSeconds:120,restTimerEnabled:true,theme:'dark',accentColor:'red'};document.documentElement.dataset.appTheme=s.theme;document.documentElement.dataset.appAccent=s.accentColor;document.documentElement.style.setProperty('--tg-bg-color',s.theme==='dark'?'#000':'#f2f2f7');document.documentElement.style.setProperty('--tg-secondary-bg-color',s.theme==='dark'?'#2c2c2e':'#fff');document.documentElement.style.setProperty('--tg-text-color',s.theme==='dark'?'#f5f5f7':'#111');document.documentElement.style.setProperty('--tg-hint-color',s.theme==='dark'?'#a1a1a6':'#8e8e93');const meta=document.querySelector('meta[name="theme-color"]');if(meta)meta.setAttribute('content',s.theme==='dark'?'#000000':'#f2f2f7');applyAppearance(readAppearance());},[data?.settings?.theme,data?.settings?.accentColor]);
   useEffect(()=>{
     const tg=getTelegram(); if(!tg) return;
     const show=screen.kind!=='home';
@@ -720,7 +722,8 @@ function SettingsScreen({data,onChange}:{data:AppData;onChange:(d:AppData)=>Prom
 
 
  return <div className="screen"><Top title="Настройки" sub="Приложение и шаблоны"/>
-  <div className="card settings-group"><div className="settings-section-title">ОФОРМЛЕНИЕ</div>
+  <DesignPreferences/>
+  <div className="card settings-group journal-appearance"><div className="settings-section-title">ОФОРМЛЕНИЕ</div>
    <div className="settings-item"><div><strong>Тема</strong></div><div className="segmented compact"><button className={settings.theme==='light'?'active':''} onClick={()=>updateSettings({theme:'light'})}>Белая</button><button className={settings.theme==='dark'?'active':''} onClick={()=>updateSettings({theme:'dark'})}>Чёрная</button></div></div>
    <div className="accent-picker"><div className="accent-picker-title">Акцентный цвет</div><div className="accent-options">{accentOptions.map(([id,name,color])=><button key={id} title={name} aria-label={name} className={'accent-swatch '+(settings.accentColor===id?'selected':'')} style={{'--swatch':color} as React.CSSProperties} onClick={()=>updateSettings({accentColor:id})}><span/></button>)}</div></div>
   </div>
