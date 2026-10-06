@@ -5,7 +5,7 @@ import { journal } from './fixtures';
 function telegram(id = 101) {
   window.Telegram = { WebApp: { initData: `signed-${id}`, initDataUnsafe: { user: { id } } } } as NonNullable<Window['Telegram']>;
 }
-const response = (data = journal(), version = '"v1"', id = 101) => new Response(JSON.stringify(data), { headers: { ETag: version, 'X-Telegram-User-Id': String(id) } });
+const response = (data: import('../src/types').AppData = journal(), version = '"v1"', id = 101) => new Response(JSON.stringify(data), { headers: { ETag: version, 'X-Telegram-User-Id': String(id) } });
 beforeEach(() => { localStorage.clear();telegram();vi.resetModules(); });
 afterEach(() => { vi.unstubAllGlobals();vi.useRealTimers();delete window.Telegram; });
 
@@ -127,5 +127,37 @@ describe('shared local storage guard', () => {
     const changes = journal();changes.workouts[0].name = 'tab A';tabA.stageData(changes);
     expect(() => tabB.stageData(journal())).toThrow('другой вкладке');
     expect(loadPending()?.data).toEqual(changes);
+  });
+});
+
+describe('authorized server reset recovery', () => {
+  it('returns the authorized account to onboarding and archives its pending local journal', async () => {
+    telegram(317226495);
+    const { blankData, stagePending } = await import('../src/storage');
+    const old = journal(); stagePending(old, '"old"'); saveData(old);
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => response(blankData(), '"new"', 317226495)));
+    const api = await import('../src/api');
+    expect(await api.getAppData()).toEqual(blankData());
+    expect(api.getSyncState()).toBe('synced');
+    expect(loadPending()).toBeNull();
+    const backupKey = Object.keys(localStorage).find(k => k.includes(':before-server-reset:'))!;
+    expect(JSON.parse(JSON.parse(localStorage.getItem(backupKey)!).pending).data).toEqual(old);
+    expect(localStorage.getItem(`${userStorageKey()}:reset-2026-10-07`)).toBe('done');
+  });
+  it('preserves other accounts even if their server journal is absent', async () => {
+    const { blankData, stagePending } = await import('../src/storage');
+    const old = journal();stagePending(old, '"old"');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(blankData(), '"new"')));
+    const api = await import('../src/api');
+    expect(await api.getAppData()).toEqual(old);
+    expect(api.getSyncState()).toBe('conflict');
+    expect(loadPending()?.data).toEqual(old);
+  });
+  it('refuses recovery when the server still has a journal', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => response()));
+    const api = await import('../src/api');await api.getAppData();api.stageData(journal());
+    const before=localStorage.getItem(`${userStorageKey()}:pending`);
+    await expect(api.recoverServerReset()).rejects.toThrow('На сервере есть журнал');
+    expect(localStorage.getItem(`${userStorageKey()}:pending`)).toBe(before);
   });
 });

@@ -1,6 +1,6 @@
 import type { AppData } from './types';
 import { acknowledge, loadCachedData, loadData, loadPending, saveData, stagePending, userStorageKey } from './storage';
-import { isValidAppData } from './domain';
+import { isValidAppData, needsOnboarding } from './domain';
 import { getTelegram } from './telegram';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://jyywrpxetdfzjdqhebpj.supabase.co/functions/v1/api';
@@ -57,6 +57,14 @@ export async function getAppData(): Promise<AppData> {
     checkSession();
     verifiedSession = true;
     if (pending) {
+      // Owner explicitly requested this account's reset on 2026-10-07.
+      // Server identity and absence of a journal are verified before touching local data.
+      if (getTelegram()?.initDataUnsafe?.user?.id === 317226495 && remoteVersion === '"new"'
+        && needsOnboarding(data) && !localStorage.getItem(`${key}:reset-2026-10-07`)) {
+        const reset = await recoverServerReset();
+        localStorage.setItem(`${key}:reset-2026-10-07`, 'done');
+        return reset;
+      }
       // Never replace unsynced changes with a remote snapshot or silently rebase them.
       version = pending.baseVersion;
       state = version === remoteVersion ? 'pending' : 'conflict';
@@ -124,4 +132,29 @@ export async function notifyTimerExpired(): Promise<void> {
   if (!initData) return;
   const response = await request({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'timer_expired' }) });
   if (!response.ok) throw new Error('Уведомление таймера не отправлено.');
+}
+
+// Explicit recovery after an administrator reset. Never replace an existing server journal.
+export async function recoverServerReset(): Promise<AppData> {
+  checkSession();
+  if (!initData || !verifiedSession) throw new Error('Сначала подтвердите соединение с сервером.');
+  const response = await request();
+  if (!response.ok) throw new Error('Не удалось проверить сброс на сервере.');
+  const remoteVersion = responseVersion(response);
+  const data: unknown = await response.json();
+  if (remoteVersion !== '"new"' || !isValidAppData(data) || !needsOnboarding(data)) {
+    throw new Error('На сервере есть журнал. Сброс локальной копии заблокирован.');
+  }
+  checkSession();
+  const cached = localStorage.getItem(key);
+  const pending = localStorage.getItem(`${key}:pending`);
+  // A failed backup write prevents all changes. Keep raw snapshots, including malformed data.
+  const backupKey = `${key}:before-server-reset:${crypto.randomUUID()}`;
+  localStorage.setItem(backupKey, JSON.stringify({ cached, pending, savedAt: new Date().toISOString() }));
+  saveData(data, key);
+  localStorage.removeItem(`${key}:pending`);
+  observedPending = null;
+  version = remoteVersion;
+  state = 'synced';
+  return data;
 }
