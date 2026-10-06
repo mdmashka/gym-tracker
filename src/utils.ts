@@ -1,6 +1,7 @@
-import type { AppData, Exercise, SetEntry, Workout, WorkoutExercise, WorkoutTypeId } from './types';
+import { exerciseName } from './domain';
+import type { AppData, SetEntry, Workout, WorkoutExercise, WorkoutTypeId } from './types';
 
-export const uid = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2,9)}`;
+export const uid = () => crypto.randomUUID();
 export const todayISO = () => {
   const d = new Date();
   const y = d.getFullYear();
@@ -53,7 +54,7 @@ export function latestTwoExecutions(data: AppData, typeId: WorkoutTypeId, exerci
   return out;
 }
 export function startWorkout(data: AppData, typeId: WorkoutTypeId): Workout {
-  const exercises = getExercisesForType(data,typeId).map((e,idx)=>({
+  const exercises: WorkoutExercise[] = getExercisesForType(data,typeId).map((e,idx)=>({
     id: uid(), exerciseId:e.id, order:idx+1, skipped:false, loadType:e.loadType==='bodyweight'?'bodyweight':'weight', sets:[]
   }));
   const now = new Date().toISOString();
@@ -62,7 +63,7 @@ export function startWorkout(data: AppData, typeId: WorkoutTypeId): Workout {
 export function ensureWorkoutExercises(workout: Workout, data: AppData): Workout {
   const known = new Set(workout.exercises.map(e=>e.exerciseId));
   const max = workout.exercises.reduce((m,e)=>Math.max(m,e.order),0);
-  const extras = getExercisesForType(data,workout.typeId).filter(e=>!known.has(e.id)).map((e,i)=>({id:uid(),exerciseId:e.id,order:max+i+1,skipped:false,loadType:e.loadType==='bodyweight'?'bodyweight':'weight',sets:[]}));
+  const extras: WorkoutExercise[] = getExercisesForType(data,workout.typeId).filter(e=>!known.has(e.id)).map((e,i)=>({id:uid(),exerciseId:e.id,order:max+i+1,skipped:false,loadType:e.loadType==='bodyweight'?'bodyweight':'weight',sets:[]}));
   return extras.length ? {...workout,exercises:[...workout.exercises,...extras]} : workout;
 }
 export function setSummary(we: WorkoutExercise) {
@@ -80,11 +81,9 @@ export function buildExportRows(data:AppData) {
   for (const w of [...data.workouts].sort((a,b)=>a.date.localeCompare(b.date))) {
     const type=workoutTypeName(data,w.typeId);
     for(const we of [...w.exercises].sort((a,b)=>a.order-b.order)){
-      const ex=data.exercises.find(e=>e.id===we.exerciseId);
-      const exerciseName=we.customName ?? ex?.name;
-      if(!exerciseName) continue;
-      if(we.skipped && !we.sets.length){ rows.push([w.date,type,exerciseName,'','','',we.notes??'Пропущено']); continue; }
-      we.sets.forEach((s,i)=>rows.push([w.date,type,exerciseName,String(i+1),formatWeight(s.weight),formatReps(s.reps),s.comment??'']));
+      const name=exerciseName(data,we);
+      if(we.skipped && !we.sets.length){ rows.push([w.date,type,name,'','','',we.notes??'Пропущено']); continue; }
+      we.sets.forEach((s,i)=>rows.push([w.date,type,name,String(i+1),formatWeight(s.weight),formatReps(s.reps),s.comment??'']));
     }
   }
   return rows;
