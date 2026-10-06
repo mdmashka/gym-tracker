@@ -1,3 +1,5 @@
+> Legacy instructions: do not run migrations or imports from this document to prepare this release. Read `docs/SAFE_RELEASE.md` from the repository root first. The active API uses versioned JSON journal writes, not client_id synchronization.
+
 # Deployment checklist
 
 ## 1. Telegram

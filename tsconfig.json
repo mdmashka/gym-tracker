@@ -14,8 +14,9 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     "jsx": "react-jsx"
   },
-  "include": ["src"],
+  "include": ["src", "tests", "vitest.config.ts", "playwright.config.ts"],
   "references": []
 }

@@ -1,3 +1,5 @@
+> Legacy instructions: do not run migrations or imports from this document to prepare this release. Read `docs/SAFE_RELEASE.md` from the repository root first. The active API uses versioned JSON journal writes, not client_id synchronization.
+
 # User-specific data setup
 
 The Mini App is designed so each Telegram user has a separate `user_app_data` row. The API validates Telegram `initData` and uses the validated Telegram user ID as the storage key. This follows Telegram’s requirement to validate `initData` on the server before trusting user identity.

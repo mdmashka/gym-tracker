@@ -1,58 +1,63 @@
-import type { AppData } from './types';
+import type { AppData } from './types.ts';
+import { isValidAppData } from './domain.ts';
 
-const CONFIG_KEY = 'gym-log:config:v2';
-
-function userStorageKey() {
+export function userStorageKey() {
   const telegramUserId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
   return telegramUserId ? `gym-log:data:v2:${telegramUserId}` : 'gym-log:data:v2:browser-demo';
 }
 
-const DEFAULT_TYPES = [
-  { id: 'legs' as const, name: 'Ноги', slug: 'legs' },
-  { id: 'arms' as const, name: 'Руки и грудь', slug: 'arms' },
-  { id: 'back_shoulders' as const, name: 'Спина и плечи', slug: 'back_shoulders' },
-];
+import { blankData } from './defaults.ts';
+export { blankData } from './defaults.ts';
 
-const DEFAULT_EXERCISES = [
-  ['legs', 'Маятниковый присед', 'weight'], ['legs', 'Жим ногами лёжа', 'weight'], ['legs', 'Разгибание ног', 'weight'], ['legs', 'Сгибание ног сидя', 'weight'], ['legs', 'Сведение ног', 'weight'], ['legs', 'Икры', 'weight'], ['legs', 'Присед на одной ноге', 'weight'], ['legs', 'Пресс', 'weight'],
-  ['arms', 'Жим грифа (разминка)', 'weight'], ['arms', 'Жим от груди (тренажёр)', 'weight'], ['arms', 'Разведение лёжа (грудь)', 'weight'], ['arms', 'Жим гантелей сидя', 'dumbbell'], ['arms', 'Разведение по диагонали', 'weight'], ['arms', 'Трицепс на блоке', 'weight'], ['arms', 'Сведение рук', 'weight'], ['arms', 'Пресс', 'weight'],
-  ['back_shoulders', 'Тяга верхнего блока', 'weight'], ['back_shoulders', 'Тяга нижнего блока', 'weight'], ['back_shoulders', 'Тяга на заднюю дельту', 'weight'], ['back_shoulders', 'Тяга гантели в наклоне', 'dumbbell'], ['back_shoulders', 'Разведение в тренажёре', 'weight'], ['back_shoulders', 'Подтягивания с противовесом', 'assisted'], ['back_shoulders', 'Подъём гантелей на бицепс', 'dumbbell'], ['back_shoulders', 'Пресс', 'weight'],
-];
+export interface PendingData { data: AppData; baseVersion: string | null }
 
-export function blankData(): AppData {
-  return {
-    workoutTypes: [...DEFAULT_TYPES],
-    exercises: DEFAULT_EXERCISES.map(([workoutTypeId, name, loadType], i) => ({
-      id: `default-${i + 1}`,
-      workoutTypeId: workoutTypeId as AppData['exercises'][number]['workoutTypeId'],
-      name,
-      loadType: loadType as AppData['exercises'][number]['loadType'],
-      sortOrder: i % 8 + 1,
-      isActive: true,
-    })),
-    workouts: [],
-    onboardingComplete: false,
-  };
+function parseData(raw: string): AppData {
+  const value: unknown = JSON.parse(raw);
+  if (!isValidAppData(value)) throw new Error('Локальные данные повреждены. Не очищайте хранилище; сохраните резервную копию.');
+  return value;
+}
+
+export function loadCachedData(key = userStorageKey()): AppData | null {
+  const raw = localStorage.getItem(key);
+  return raw === null ? null : parseData(raw);
+}
+
+export function loadPending(key = userStorageKey()): PendingData | null {
+  const raw = localStorage.getItem(`${key}:pending`);
+  if (raw === null) return null;
+  const value = JSON.parse(raw) as PendingData;
+  if (!isValidAppData(value.data) || (value.baseVersion !== null && typeof value.baseVersion !== 'string')) {
+    throw new Error('Не удалось прочитать несинхронизированные данные. Не очищайте хранилище.');
+  }
+  return value;
 }
 
 export function loadData(): AppData {
-  const raw = localStorage.getItem(userStorageKey());
-  if (!raw) return blankData();
-  try { return JSON.parse(raw) as AppData; }
-  catch { return blankData(); }
+  return loadPending()?.data ?? loadCachedData() ?? blankData();
 }
 
-export function saveData(data: AppData) {
-  localStorage.setItem(userStorageKey(), JSON.stringify(data));
+export function saveData(data: AppData, key = userStorageKey()) {
+  localStorage.setItem(key, JSON.stringify(data));
+}
+
+export function stagePending(data: AppData, baseVersion: string | null, key = userStorageKey()) {
+  // One atomic write preserves the latest snapshot before any network request.
+  localStorage.setItem(`${key}:pending`, JSON.stringify({ data, baseVersion }));
+}
+
+export function acknowledge(data: AppData, version: string, key = userStorageKey()) {
+  const pending = loadPending(key);
+  saveData(data, key);
+  if (!pending || JSON.stringify(pending.data) === JSON.stringify(data)) {
+    localStorage.removeItem(`${key}:pending`);
+  } else {
+    stagePending(pending.data, version, key);
+  }
 }
 
 export function resetDemo() {
+  if (window.Telegram?.WebApp?.initData) throw new Error('Сброс данных Telegram-пользователя запрещён.');
   localStorage.removeItem(userStorageKey());
-  localStorage.removeItem(CONFIG_KEY);
+  localStorage.removeItem(`${userStorageKey()}:pending`);
   location.reload();
 }
-
-export function getSettings() {
-  try { return JSON.parse(localStorage.getItem(CONFIG_KEY) ?? '{}'); } catch { return {}; }
-}
-export function saveSettings(v: unknown) { localStorage.setItem(CONFIG_KEY, JSON.stringify(v)); }

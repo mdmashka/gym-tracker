@@ -1,23 +1,28 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { createRoot } from 'react-dom/client';
 import * as XLSX from 'xlsx';
 import type { AppData, Exercise, LoadType, Screen, SetEntry, Workout, WorkoutExercise, WorkoutTypeId } from './types';
-import { getAppData, isRemoteConfigured, saveRemoteData, notifyTimerExpired, ensureMenuButton, deleteRemoteWorkout } from './api';
-import { formatDate, formatLongDate, formatReps, formatWeight, getExercisesForType, latestTwoExecutions, lastExecution, startWorkout, todayISO, uid, workoutTypeName, csvEscape, buildExportRows, ensureWorkoutExercises, downloadText } from './utils';
+import { getAppData, getSyncState, stageData, saveRemoteData, notifyTimerExpired, type SyncState } from './api';
+import { completeOnboarding, needsOnboarding, exerciseName, saveTemplateExercises, deleteTemplate as removeTemplate, isDate } from './domain';
+import { formatDate, formatLongDate, formatReps, formatWeight, latestTwoExecutions, startWorkout, todayISO, uid, workoutTypeName, csvEscape, buildExportRows, downloadText } from './utils';
 import { getTelegram, haptic, initTelegram } from './telegram';
 import './styles.css';
 
-function App(){
+export function App(){
   const [data,setData]=useState<AppData|null>(null);
+  const dataRef=useRef<AppData|null>(null);
   const [screen,setScreen]=useState<Screen>({kind:'home'});
   const [timer,setTimer]=useState<{until:number}|null>(null);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState<string|null>(null);
   const [showWelcomeTour,setShowWelcomeTour]=useState(false);
   const workoutBack=useRef<()=>void>(()=>{});
-  const syncQueue=useRef<Promise<void>>(Promise.resolve());
+  const syncQueue=useRef<Promise<boolean>>(Promise.resolve(true));
+  const [syncState,setSyncState]=useState<SyncState>('local');
 
-  useEffect(()=>{ initTelegram(); getAppData().then(next=>{const settings=next.settings ?? {restTimerSeconds:120,restTimerEnabled:true,theme:'dark',accentColor:'red'}; const demoResetKey='gym-tracker-demo-onboarding-reset-v2'; const shouldReplayOnboarding=localStorage.getItem(demoResetKey)!=='done'; setData({...next,settings,onboardingComplete:shouldReplayOnboarding?false:next.onboardingComplete}); ensureMenuButton().catch(()=>undefined)}).catch(e=>setError(String(e))).finally(()=>setLoading(false)); },[]);
+  useEffect(()=>{ initTelegram(); getAppData().then(next=>{
+    const settings={restTimerSeconds:120,restTimerEnabled:true,theme:'dark' as const,accentColor:'red' as const,...next.settings};
+    const loaded={...next,settings};dataRef.current=loaded;setData(loaded);setSyncState(getSyncState());
+  }).catch(e=>setError(String(e))).finally(()=>setLoading(false)); },[]);
   useEffect(()=>{
     const tg=getTelegram(); if(!tg) return;
     const handler=()=>workoutBack.current();
@@ -27,45 +32,44 @@ function App(){
   useEffect(()=>{
     const tg=getTelegram(); if(!tg) return;
     const show=screen.kind!=='home';
-    show?tg.BackButton.show():tg.BackButton.hide();
+    if(show)tg.BackButton.show();else tg.BackButton.hide();
     workoutBack.current=()=>setScreen(screen.kind==='workout'||screen.kind==='history'||screen.kind==='settings'||screen.kind==='calendar'||screen.kind==='summary'?{kind:'home'}:{kind:'home'});
   },[screen]);
 
-  const commit=(next:AppData):Promise<void>=>{
-    setData(next);
-    // Keep remote writes in the same order as local changes. A quick sequence
-    // of saved sets must never be reordered by slower network responses.
-    syncQueue.current=syncQueue.current
-      .catch(()=>undefined)
-      .then(()=>saveRemoteData(next))
-      .then(()=>{setError(null)})
-      .catch(e=>{ setError(`Не удалось синхронизировать: ${String(e)}`); });
+  const commit=(next:AppData):Promise<boolean>=>{
+    try { stageData(next); } catch(e) { setError(String(e));setSyncState(getSyncState());return Promise.resolve(false); }
+    dataRef.current=next;setData(next);setSyncState(getSyncState());
+    syncQueue.current=syncQueue.current.catch(()=>false).then(async()=>{
+      try { await saveRemoteData(next);setError(null);setSyncState(getSyncState());return true; }
+      catch(e) { setError(String(e));setSyncState(getSyncState());return false; }
+    });
     return syncQueue.current;
   };
+  const changeWorkout=(w:Workout)=>{const base=dataRef.current!;return {...base,workouts:base.workouts.map(x=>x.id===w.id?{...w,updatedAt:new Date().toISOString()}:x)}};
+  const exportBackup=()=>{if(data)downloadText('gym-tracker-backup.json',JSON.stringify(data,null,2),'application/json')};
   if(loading) return <div className="splash-screen"><div className="splash-title">gym tracker</div><div className="splash-subtitle">мини-приложение</div><a className="splash-author" href="https://t.me/marieblokh" target="_blank" rel="noreferrer">vibe coded by @marieblokh</a><div className="splash-loader"><span/><span/><span/></div></div>;
-  if(!data) return <div className="app"><div className="card"><h2>Не удалось открыть журнал</h2><p className="muted">{error}</p></div></div>;
+  if(!data) return <div className="app"><div className="card"><h2>Не удалось открыть журнал</h2><p className="muted">{error}</p><button className="secondary" onClick={()=>window.location.reload()}>Повторить загрузку</button></div></div>;
 
   let body:React.ReactNode;
-  if(screen.kind==='home' && !data.onboardingComplete) {
-    body=<Onboarding data={data} onComplete={(next)=>{localStorage.setItem('gym-tracker-demo-onboarding-reset-v2','done');commit({...next,onboardingComplete:true}).then(()=>{setScreen({kind:'home'});setShowWelcomeTour(true);});}}/>;
+  if(screen.kind==='home' && needsOnboarding(data)) {
+    body=<Onboarding data={data} onComplete={(next)=>{commit({...next,onboardingComplete:true}).then(saved=>{if(saved){setScreen({kind:'home'});setShowWelcomeTour(true);}});}}/>;
   } else if(screen.kind==='home') body=<Home data={data}
     onStart={(typeId)=>{const w=startWorkout(data,typeId);setScreen({kind:'workout',typeId,workoutId:w.id});commit({...data,workouts:[...data.workouts,w]});}}
-    onContinue={(draft)=>{const ensured=ensureWorkoutExercises(draft,data);if(ensured!==draft)commit({...data,workouts:data.workouts.map(w=>w.id===draft.id?ensured:w)});setScreen({kind:'workout',typeId:draft.typeId,workoutId:draft.id});}}
+    onContinue={(draft)=>setScreen({kind:'workout',typeId:draft.typeId,workoutId:draft.id})}
     onNav={setScreen}
     onCreate={(date,typeId)=>{const w=startWorkout(data,typeId);const dated={...w,date};commit({...data,workouts:[...data.workouts,dated]}).then(()=>setScreen({kind:'workout',typeId,workoutId:dated.id}));}}/>;
   if(screen.kind==='workout') {
     const w0=data.workouts.find(w=>w.id===screen.workoutId);
     body=w0?<WorkoutScreen data={data} workout={w0} editing={screen.mode==='edit'}
-      onChange={w=>commit({...data,workouts:data.workouts.map(x=>x.id===w.id?{...w,updatedAt:new Date().toISOString()}:x)})}
+      onChange={w=>commit(changeWorkout(w))}
+      onLocalChange={w=>{const next=changeWorkout(w);void commit(next);return dataRef.current===next;}}
       onFinish={w=>commit({...data,workouts:data.workouts.map(x=>x.id===w.id?{...x,status:'completed',completedAt:new Date().toISOString(),updatedAt:new Date().toISOString()}:x)})}
       onTimer={(seconds)=>setTimer({until:Date.now()+seconds*1000})}
       onHome={()=>setScreen({kind:'home'})}
       onDeleteDraft={async()=>{
         const next={...data,workouts:data.workouts.filter(x=>x.id!==w0.id)};
-        await deleteRemoteWorkout(w0.id);
         setTimer(null);
-        await commit(next);
-        setScreen({kind:'home'});
+        if(await commit(next))setScreen({kind:'home'});
       }}
     />:<NotFound/>;
   }
@@ -74,11 +78,11 @@ function App(){
   onEdit={()=>setScreen({kind:'workout',typeId:w.typeId,workoutId:w.id,mode:'edit'})}
   onDuplicate={()=>{const copy:Workout={...w,id:uid(),date:todayISO(),status:'draft',createdAt:new Date().toISOString(),completedAt:undefined,name:w.name,exercises:w.exercises.map(we=>({...we,id:uid(),sets:we.sets.map(s=>({...s,id:uid()}))}))};commit({...data,workouts:[...data.workouts,copy]}).then(()=>setScreen({kind:'workout',typeId:copy.typeId,workoutId:copy.id}));}}
   onRepeat={()=>{const copy:Workout={...w,id:uid(),date:todayISO(),status:'draft',createdAt:new Date().toISOString(),completedAt:undefined,name:w.name,exercises:w.exercises.map(we=>({...we,id:uid(),sets:[],notes:undefined}))};commit({...data,workouts:[...data.workouts,copy]}).then(()=>setScreen({kind:'workout',typeId:copy.typeId,workoutId:copy.id}));}}
-  onDelete={async()=>{const next={...data,workouts:data.workouts.filter(x=>x.id!==w.id)};await deleteRemoteWorkout(w.id);await commit(next);setScreen({kind:'home'});}}/>:<NotFound/>; }
+  onDelete={async()=>{const next={...data,workouts:data.workouts.filter(x=>x.id!==w.id)};if(await commit(next))setScreen({kind:'home'});}}/>:<NotFound/>; }
   if(screen.kind==='summary') body=<SummaryScreen data={data}/>;
   if(screen.kind==='settings') body=<SettingsScreen data={data} onChange={commit}/>;
   const appSettings=data.settings ?? {restTimerSeconds:120,restTimerEnabled:true,theme:'dark',accentColor:'red'};
-  return <div className={`app theme-${appSettings.theme} accent-${appSettings.accentColor}`}>{error && <div className="notice no-print">{error}</div>}{body}{timer && <RestTimer timer={timer} onClose={()=>setTimer(null)}/>} {showWelcomeTour && <WelcomeTour onClose={()=>setShowWelcomeTour(false)}/>}</div>;
+  return <div className={`app theme-${appSettings.theme} accent-${appSettings.accentColor} ${screen.kind==='workout'?'workout-active':''}`}>{syncState!=='local'&&<div className="notice no-print" role="status">{syncState==='synced'?'Сохранено на сервере':syncState==='conflict'?'Есть конфликт с данными на другом устройстве. Локальная копия сохранена.':syncState==='pending'?'Изменения сохранены на устройстве. Ожидают синхронизации.':'Нет подтверждения синхронизации. Локальная копия сохранена.'}{syncState!=='synced'&&<><button className="secondary" onClick={()=>{getAppData().then(next=>commit(next)).catch(e=>setError(String(e)))}}>Повторить синхронизацию</button><button className="secondary" onClick={exportBackup}>Скачать резервную копию</button></>}</div>}{error && <div className="notice no-print">{error}</div>}{body}{timer && <RestTimer timer={timer} onClose={()=>setTimer(null)}/>} {showWelcomeTour && <WelcomeTour onClose={()=>setShowWelcomeTour(false)}/>}</div>;
 }
 
 
@@ -146,7 +150,7 @@ function Onboarding({data,onComplete}:{data:AppData;onComplete:(next:AppData)=>v
    const workoutTypes=templates.map(t=>({id:t.id,name:t.name,slug:t.slug}));
    const exercises:Exercise[]=[];
    templates.forEach(t=>(chosen[t.id]??[]).forEach((name,i)=>exercises.push({id:uid(),workoutTypeId:t.id,name,loadType:'weight',sortOrder:i+1,isActive:true})));
-   onComplete({...data,workoutTypes,exercises,workouts:[],onboardingComplete:true,settings:{restTimerSeconds:timerSeconds,restTimerEnabled:timerEnabled,theme,accentColor}});
+   onComplete(completeOnboarding(data,workoutTypes,exercises,{restTimerSeconds:timerSeconds,restTimerEnabled:timerEnabled,theme,accentColor}));
  };
  if(step===1)return <div className="onboarding screen">
    <div className="onboarding-hero"><div className="onboarding-kicker">GYM TRACKER</div><h1>Настроим тренировки</h1><p>Выберите готовые шаблоны тренировочных дней или создайте свои. Один шаблон — один отдельный тренировочный день.</p></div>
@@ -256,7 +260,7 @@ function Home({data,onStart,onContinue,onNav,onCreate}:{data:AppData;onStart:(t:
  const iconForType=(typeId:WorkoutTypeId):'legs'|'arms'|'back' => typeId==='legs'?'legs':typeId==='arms'||typeId==='chest'?'arms':'back'; const startWorkout=(typeId:WorkoutTypeId)=>{haptic();setShowStart(false);onStart(typeId)};
  const selectedWorkouts=selectedDate?([...byDate.get(selectedDate)??[]].sort((a,b)=>(a.completedAt??'').localeCompare(b.completedAt??''))):[];
  return <div className="screen home-screen">
-  <div className="home-hero"><div className="home-eyebrow">ТРЕНИРОВКИ</div><h1>Сегодня</h1><div className="home-date">{new Date(`${today}T12:00:00`).toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long'})}</div><button className="home-start primary" onClick={()=>{haptic();draft?onContinue(draft):setShowStart(true)}}>{draft?'Продолжить тренировку':'Начать тренировку'}</button>
+  <div className="home-hero"><div className="home-eyebrow">ТРЕНИРОВКИ</div><h1>Сегодня</h1><div className="home-date">{new Date(`${today}T12:00:00`).toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long'})}</div><button className="home-start primary" onClick={()=>{haptic();if(draft)onContinue(draft);else setShowStart(true)}}>{draft?'Продолжить тренировку':'Начать тренировку'}</button>
   {draft&&<div className="draft-preview" onClick={()=>onContinue(draft)}><div><strong>{workoutTypeName(data,draft.typeId)}</strong><span>{draft.name||'Черновик тренировки'}</span></div><div className="draft-time">изменено {formatDraftTime(draft.updatedAt??draft.createdAt)}<b>›</b></div></div>}</div>
   <section className="home-section"><h2>Твоя активность</h2><div className="week-card activity-stats-grid">
    <div className="activity-stat-tile"><strong>{weekCount}</strong><span>за неделю</span><div className={"activity-stat-delta "+(weekDelta>0?"up":weekDelta<0?"down":"same")}><b>{weekDelta>0?"↗":weekDelta<0?"↘":"→"}</b><span>{Math.abs(weekDelta)}</span></div></div>
@@ -275,7 +279,7 @@ function Home({data,onStart,onContinue,onNav,onCreate}:{data:AppData;onStart:(t:
   {showStart&&<div className="modal-backdrop" onClick={()=>setShowStart(false)}><div className="modal start-modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><h2>Новая тренировка</h2><button className="icon-btn" onClick={()=>setShowStart(false)}>×</button></div><div className="start-options">{data.workoutTypes.map(t=><button className="start-option" key={t.id} onClick={()=>startWorkout(t.id)}><span className={`start-option-icon start-${iconForType(t.id)}`}><AppIcon kind={iconForType(t.id)}/></span><span><strong>{t.name}</strong><small>{data.workoutTypes.length>1?'Тренировка':'Новая тренировка'}</small></span><b>›</b></button>)}</div></div></div>}
  </div>
 }
-function WorkoutScreen({data,workout,editing,onChange,onFinish,onTimer,onHome,onDeleteDraft}:{data:AppData;workout:Workout;editing?:boolean;onChange:(w:Workout)=>void;onFinish:(w:Workout)=>void;onTimer:(s:number)=>void;onHome:()=>void;onDeleteDraft:()=>Promise<void>}){
+function WorkoutScreen({data,workout,editing,onChange,onLocalChange,onFinish,onTimer,onHome,onDeleteDraft}:{data:AppData;workout:Workout;editing?:boolean;onChange:(w:Workout)=>Promise<boolean>;onLocalChange:(w:Workout)=>boolean;onFinish:(w:Workout)=>Promise<boolean>;onTimer:(s:number)=>void;onHome:()=>void;onDeleteDraft:()=>Promise<void>}){
  const [currentId,setCurrentId]=useState<string|null>(()=>workout.exercises.find(x=>!x.skipped&&x.sets.length===0)?.id ?? workout.exercises.find(x=>!x.skipped)?.id ?? null);
  const [showAdd,setShowAdd]=useState(false);
  const [customExerciseName,setCustomExerciseName]=useState('');
@@ -283,26 +287,27 @@ function WorkoutScreen({data,workout,editing,onChange,onFinish,onTimer,onHome,on
  const [showDraftMenu,setShowDraftMenu]=useState(false);
  const [showDraftDeleteConfirm,setShowDraftDeleteConfirm]=useState(false);
  const exercises=[...workout.exercises].sort((a,b)=>a.order-b.order);
- const updateWe=(id:string,patch:Partial<WorkoutExercise>)=>onChange({...workout,exercises:workout.exercises.map(x=>x.id===id?{...x,...patch}:x)});
+ const updateWe=(id:string,patch:Partial<WorkoutExercise>)=>onLocalChange({...workout,exercises:workout.exercises.map(x=>x.id===id?{...x,...patch}:x)});
  const addCustomExercise=()=>{
    const name=customExerciseName.trim(); if(!name)return;
    const max=Math.max(0,...workout.exercises.map(x=>x.order));
    const we:WorkoutExercise={id:uid(),exerciseId:`custom-${uid()}`,customName:name,order:max+1,skipped:false,loadType:'weight',sets:[]};
-   onChange({...workout,exercises:[...workout.exercises,we]}); setCustomExerciseName(''); setShowAdd(false); setCurrentId(we.id);
+   if(!onLocalChange({...workout,exercises:[...workout.exercises,we]}))return; setCustomExerciseName(''); setShowAdd(false); setCurrentId(we.id);
  };
  const addOneShot=(exercise:Exercise)=>{
    const max=Math.max(0,...workout.exercises.map(x=>x.order));
    const we:WorkoutExercise={id:uid(),exerciseId:exercise.id,order:max+1,skipped:false,loadType:exercise.loadType==='bodyweight'?'bodyweight':'weight',sets:[]};
-   onChange({...workout,exercises:[...workout.exercises,we]}); setCurrentId(we.id);
+   if(!onLocalChange({...workout,exercises:[...workout.exercises,we]}))return; setCurrentId(we.id);
  };
  const move=(id:string,dir:-1|1)=>{
    const sorted=[...workout.exercises].sort((a,b)=>a.order-b.order); const i=sorted.findIndex(x=>x.id===id); const j=i+dir; if(i<0||j<0||j>=sorted.length)return;
-   const tmp=sorted[i];sorted[i]=sorted[j];sorted[j]=tmp; onChange({...workout,exercises:sorted.map((x,idx)=>({...x,order:idx+1}))});
+   const tmp=sorted[i];sorted[i]=sorted[j];sorted[j]=tmp; onLocalChange({...workout,exercises:sorted.map((x,idx)=>({...x,order:idx+1}))});
  };
- const skip=(id:string)=>{updateWe(id,{skipped:true}); if(currentId===id)setCurrentId(null);};
- const removeExercise=(id:string)=>{onChange({...workout,exercises:workout.exercises.filter(x=>x.id!==id)}); if(currentId===id)setCurrentId(null);};
+ const skip=(id:string)=>{if(!updateWe(id,{skipped:true}))return; if(currentId===id)setCurrentId(null);};
+ const removeExercise=(id:string)=>{if(!onLocalChange({...workout,exercises:workout.exercises.filter(x=>x.id!==id)}))return; if(currentId===id)setCurrentId(null);};
  const [showReview,setShowReview]=useState(false);
- const finish=()=>{haptic('success');onFinish(workout);setShowReview(true);};
+ const [saving,setSaving]=useState(false);
+ const finish=async()=>{if(saving)return;setSaving(true);try{if(await onFinish(workout)){haptic('success');setShowReview(true);}}finally{setSaving(false)}};
  const reviewStats=useMemo(()=>{
    const sets=workout.exercises.flatMap(we=>we.sets);
    const volume=sets.reduce((sum,s)=>sum+(s.weight??0)*(s.reps??0),0);
@@ -310,7 +315,7 @@ function WorkoutScreen({data,workout,editing,onChange,onFinish,onTimer,onHome,on
    return {sets:sets.length, exercises:workout.exercises.filter(x=>!x.skipped&&x.sets.length).length, volume, totalReps};
  },[workout]);
 
- const saveEdit=()=>{haptic('success');onChange({...workout,status:'completed',completedAt:workout.completedAt??new Date().toISOString()});onHome();};
+ const saveEdit=async()=>{if(saving)return;setSaving(true);try{if(await onChange({...workout,status:'completed',completedAt:workout.completedAt??new Date().toISOString()})){haptic('success');onHome();}}finally{setSaving(false)}};
  const typeName=workoutTypeName(data,workout.typeId);
  return <div className="screen">
   <Top title={workout.name || typeName} sub={`${formatLongDate(workout.date)} · ${workout.status==='draft'?'в процессе':'завершено'}`} action={
@@ -323,7 +328,7 @@ function WorkoutScreen({data,workout,editing,onChange,onFinish,onTimer,onHome,on
     </div>
   }/>
   <div className="exercise-list">
-   {exercises.map((we,idx)=>{
+   {exercises.map(we=>{
     const ex=data.exercises.find(e=>e.id===we.exerciseId) ?? (we.customName?{id:we.exerciseId,workoutTypeId:workout.typeId,name:we.customName,loadType:'weight' as LoadType,sortOrder:0,isActive:true}:null); if(!ex)return null;
     const open=currentId===we.id;
     return <ExerciseCard key={we.id} data={data} workout={workout} we={we} ex={ex} open={open} setOpen={()=>setCurrentId(we.id)} onUpdate={p=>updateWe(we.id,p)} onMove={d=>move(we.id,d)} onSkip={()=>skip(we.id)} onDelete={()=>removeExercise(we.id)} onTimer={onTimer} onClose={()=>setCurrentId(null)}/>;
@@ -331,7 +336,7 @@ function WorkoutScreen({data,workout,editing,onChange,onFinish,onTimer,onHome,on
   </div>
   <button className="secondary" onClick={()=>setShowAdd(true)}>+ Добавить упражнение</button>
   {showAdd && <div className="modal-backdrop" onClick={()=>setShowAdd(false)}><div className="modal add-exercise-modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><h2>Добавить упражнение</h2><button className="icon-btn" onClick={()=>setShowAdd(false)}>×</button></div><div className="custom-exercise-form"><label>Своё упражнение</label><div className="custom-exercise-row"><input className="input" autoFocus placeholder="Например, махи в кроссовере" value={customExerciseName} onChange={e=>setCustomExerciseName(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')addCustomExercise()}}/><button className="primary" disabled={!customExerciseName.trim()} onClick={addCustomExercise}>Добавить</button></div></div><div className="add-exercise-divider"><span>или выбери из шаблона</span></div><div className="exercise-list">{data.exercises.filter(e=>e.isActive).map(e=><button className="card choice-card" key={e.id} disabled={workout.exercises.some(w=>w.exerciseId===e.id)} style={{opacity:workout.exercises.some(w=>w.exerciseId===e.id)?0.45:1}} onClick={()=>{if(workout.exercises.some(w=>w.exerciseId===e.id))return;addOneShot(e);setShowAdd(false);}}><span className="meta"><span className="choice-title">{e.name}</span><span className="choice-sub">{workoutTypeName(data,e.workoutTypeId)}</span></span><span className="chevron">›</span></button>)}</div></div></div>}
-  <div className="workout-finish-bar"><button className="primary" onClick={editing?saveEdit:finish}>{editing?'Сохранить изменения':'Завершить тренировку'}</button></div>
+  <div className="workout-finish-bar"><button className="primary" disabled={saving} onClick={editing?saveEdit:finish}>{editing?'Сохранить изменения':'Завершить тренировку'}</button></div>
   {showMeta && <WorkoutMetaEditor data={data} workout={workout} onClose={()=>setShowMeta(false)} onSave={w=>{onChange(w);setShowMeta(false)}}/>}
   {showDraftDeleteConfirm&&<div className="modal-backdrop" onClick={()=>setShowDraftDeleteConfirm(false)}><div className="modal confirm-modal" onClick={e=>e.stopPropagation()}>
     <div className="modal-head"><h2>Удалить черновик?</h2><button className="icon-btn" onClick={()=>setShowDraftDeleteConfirm(false)}>×</button></div>
@@ -354,7 +359,7 @@ function WorkoutScreen({data,workout,editing,onChange,onFinish,onTimer,onHome,on
  </div>
 }
 
-function ExerciseCard({data,workout,we,ex,open,setOpen,onUpdate,onMove,onSkip,onDelete,onTimer,onClose}:{data:AppData;workout:Workout;we:WorkoutExercise;ex:Exercise;open:boolean;setOpen:()=>void;onUpdate:(p:Partial<WorkoutExercise>)=>void;onMove:(d:-1|1)=>void;onSkip:()=>void;onDelete:()=>void;onTimer:(s:number)=>void;onClose:()=>void}){
+function ExerciseCard({data,workout,we,ex,open,setOpen,onUpdate,onMove,onDelete,onTimer,onClose}:{data:AppData;workout:Workout;we:WorkoutExercise;ex:Exercise;open:boolean;setOpen:()=>void;onUpdate:(p:Partial<WorkoutExercise>)=>boolean;onMove:(d:-1|1)=>void;onSkip:()=>void;onDelete:()=>void;onTimer:(s:number)=>void;onClose:()=>void}){
  const [weight,setWeight]=useState<string>(()=>{const prev=we.sets[we.sets.length-1]?.weight;return prev==null||prev===0?'':String(prev)});
  const [reps,setReps]=useState<string>('');
  const [comment,setComment]=useState('');
@@ -372,7 +377,7 @@ function ExerciseCard({data,workout,we,ex,open,setOpen,onUpdate,onMove,onSkip,on
 
  const changeLoadType=(next:LoadType)=>{
    const normalized:LoadType=next==='bodyweight'?'bodyweight':'weight';
-   onUpdate({loadType:normalized});
+   if(!onUpdate({loadType:normalized}))return;
    if(normalized==='weight'){
      const prev=we.sets.slice().reverse().find(s=>s.weight!=null&&s.weight!==0);
      setWeight(prev?String(prev.weight):'');
@@ -384,9 +389,9 @@ function ExerciseCard({data,workout,we,ex,open,setOpen,onUpdate,onMove,onSkip,on
  const saveSet=()=>{
    const w=bodyweight ? 0 : (weight.trim()===''?null:Number(weight.replace(',','.')));
    const r=reps.trim()===''?null:Number(reps.replace(',','.'));
-   if(r===null || Number.isNaN(r)){ haptic('error'); return; }
+   if(r===null || !Number.isFinite(r) || r<0 || (w!==null&&!Number.isFinite(w))){ haptic('error'); return; }
    const s:SetEntry={id:uid(),order:we.sets.length+1,weight:w,reps:r,loadType:bodyweight?'bodyweight':'weight',comment:comment.trim()||undefined};
-   onUpdate({sets:[...we.sets,s]});
+   if(!onUpdate({sets:[...we.sets,s]})){haptic('error');return;}
    setReps('');
    setComment('');
    haptic();
@@ -427,18 +432,22 @@ function ExerciseCard({data,workout,we,ex,open,setOpen,onUpdate,onMove,onSkip,on
   </>}
  </div>
 }
-function RestTimer({timer,onClose}:{timer:{until:number};onClose:()=>void}){
+export function RestTimer({timer,onClose}:{timer:{until:number};onClose:()=>void}){
  const [until,setUntil]=useState(timer.until); const [left,setLeft]=useState(Math.max(0,timer.until-Date.now())); const [expired,setExpired]=useState(false); const notified=useRef(false);
+ useEffect(()=>{setUntil(timer.until);setLeft(Math.max(0,timer.until-Date.now()));setExpired(false);notified.current=false;},[timer.until]);
  useEffect(()=>{const id=setInterval(()=>{const n=Math.max(0,until-Date.now());setLeft(n);if(n===0&&!expired){setExpired(true);haptic('success');if(!notified.current){notified.current=true;notifyTimerExpired().catch(()=>undefined);}}},250);return()=>clearInterval(id)},[until,expired]);
  return <div className={`timer-fab ${expired?'timer-expired':''}`}><div><div className="eyebrow">ОТДЫХ</div><div className="timer-time">{expired?'Время вышло':`${String(Math.floor(left/60000)).padStart(2,'0')}:${String(Math.floor((left%60000)/1000)).padStart(2,'0')}`}</div></div><div className="timer-controls"><button className="timer-btn" onClick={()=>{const n=until+30000;setExpired(false);notified.current=false;setUntil(n);setLeft(n-Date.now());}}>+30</button><button className="timer-btn" onClick={()=>{const n=Math.max(Date.now(),until-30000);setExpired(false);notified.current=false;setUntil(n);setLeft(n-Date.now());}}>−30</button><button className="timer-btn" onClick={onClose}>Готово</button></div></div>
 }
-function CalendarScreen({data,onOpen,onCreate}:{data:AppData;onOpen:(w:Workout)=>void;onCreate:(date:string,typeId:WorkoutTypeId)=>void}){
+export function CalendarScreen({data,onOpen,onCreate}:{data:AppData;onOpen:(w:Workout)=>void;onCreate:(date:string,typeId:WorkoutTypeId)=>void}){
  const [month,setMonth]=useState(()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth(),1)});
  const [createDate,setCreateDate]=useState<string|null>(null);
+ const [selectedDate,setSelectedDate]=useState<string|null>(null);
  const y=month.getFullYear(),m=month.getMonth(); const first=new Date(y,m,1); const start=(first.getDay()+6)%7; const days=new Date(y,m+1,0).getDate();
- const byDate=new Map(data.workouts.filter(w=>w.status==='completed').map(w=>[w.date,w]));
- const cells=[]; for(let i=0;i<start;i++)cells.push(<div key={'p'+i}/>); for(let d=1;d<=days;d++){const date=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;const w=byDate.get(date);cells.push(<button key={date} className={`cal-day ${date===todayISO()?'today':''} ${w?'has-workout':''}`} onClick={()=>w?onOpen(w):setCreateDate(date)}>{d}{w&&<span className="cal-dot"/>}</button>)}
+ const byDate=new Map<string,Workout[]>();
+ data.workouts.filter(w=>w.status==='completed').forEach(w=>byDate.set(w.date,[...(byDate.get(w.date)??[]),w]));
+ const cells=[]; for(let i=0;i<start;i++)cells.push(<div key={'p'+i}/>); for(let d=1;d<=days;d++){const date=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;const workouts=byDate.get(date)??[];cells.push(<button key={date} className={`cal-day ${date===todayISO()?'today':''} ${workouts.length?'has-workout':''}`} onClick={()=>workouts.length?setSelectedDate(date):setCreateDate(date)}>{d}{workouts.length>0&&<span className="cal-dot"/>}</button>)}
  return <div className="screen"><Top title="Календарь"/><div className="card"><div className="calendar-head"><button className="secondary" onClick={()=>setMonth(new Date(y,m-1,1))}>‹</button><strong>{month.toLocaleDateString('ru-RU',{month:'long',year:'numeric'})}</strong><button className="secondary" onClick={()=>setMonth(new Date(y,m+1,1))}>›</button></div><div className="month-grid" style={{marginTop:12}}>{['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map(x=><div className="cal-day-name" key={x}>{x}</div>)}{cells}</div><p className="muted calendar-hint">Нажми на свободную дату, чтобы добавить тренировку.</p></div>
+ {selectedDate&&<div className="modal-backdrop" onClick={()=>setSelectedDate(null)}><div className="modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><h2>{formatLongDate(selectedDate)}</h2><button className="icon-btn" onClick={()=>setSelectedDate(null)}>×</button></div>{(byDate.get(selectedDate)??[]).map(w=><button className="start-option" key={w.id} onClick={()=>{setSelectedDate(null);onOpen(w)}}>{w.name||workoutTypeName(data,w.typeId)}</button>)}</div></div>}
  {createDate&&<div className="modal-backdrop" onClick={()=>setCreateDate(null)}><div className="modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><h2>Тренировка</h2><button className="icon-btn" onClick={()=>setCreateDate(null)}>×</button></div><p className="muted">Выбери шаблон для {formatLongDate(createDate)}.</p><div className="exercise-list calendar-type-list">{data.workoutTypes.map(t=><button key={t.id} className="card choice-card" onClick={()=>{onCreate(createDate,t.id);setCreateDate(null)}}><span className="meta"><span className="choice-title">{t.name}</span></span><span className="chevron">›</span></button>)}</div></div></div>}</div>
 }
 
@@ -447,14 +456,14 @@ function HistoryScreen({data,workout,onEdit,onDuplicate,onRepeat,onDelete}:{data
  return <div className="screen"><Top title={workout.name || workoutTypeName(data,workout.typeId)} sub={formatLongDate(workout.date)}/>
   <div className="history-actions no-print"><button className="secondary" onClick={onEdit}>Редактировать</button><button className="secondary" onClick={onRepeat}>Повторить</button><button className="secondary" onClick={onDuplicate}>Дублировать</button><button className="secondary danger-outline" onClick={()=>setConfirm(true)}>Удалить</button></div>
   {confirm&&<div className="modal-backdrop" onClick={()=>setConfirm(false)}><div className="modal confirm-modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><h2>Удалить тренировку?</h2><button className="icon-btn" onClick={()=>setConfirm(false)}>×</button></div><p className="muted">Запись будет удалена из журнала.</p><div className="action-row" style={{marginTop:14}}><button className="secondary" onClick={()=>setConfirm(false)}>Отмена</button><button className="primary danger-button" onClick={()=>{onDelete();setConfirm(false)}}>Удалить</button></div></div></div>}
-  {[...workout.exercises].sort((a,b)=>a.order-b.order).filter(we=>we.sets.length>0).map(we=>{const ex=data.exercises.find(e=>e.id===we.exerciseId);if(!ex)return null;return <div className="card" key={we.id}><div className="exercise-name">{ex.name}</div>{we.sets.map(s=><div key={s.id} className="summary-row"><span>Подход {s.order}</span><span className="summary-result">{(s.loadType ?? we.loadType ?? ex.loadType)==='bodyweight'?'Без веса × '+formatReps(s.reps)+' повт.':formatWeight(s.weight)+' кг × '+formatReps(s.reps)}</span></div>)}{we.notes&&<div className="history-empty">{we.notes}</div>}</div>})}
+  {[...workout.exercises].sort((a,b)=>a.order-b.order).filter(we=>we.sets.length>0).map(we=>{const ex=data.exercises.find(e=>e.id===we.exerciseId);return <div className="card" key={we.id}><div className="exercise-name">{exerciseName(data,we)}</div>{we.sets.map(s=><div key={s.id} className="summary-row"><span>Подход {s.order}</span><span className="summary-result">{(s.loadType ?? we.loadType ?? ex?.loadType)==='bodyweight'?'Без веса × '+formatReps(s.reps)+' повт.':formatWeight(s.weight)+' кг × '+formatReps(s.reps)}{s.comment&&<small style={{display:'block'}}>{s.comment}</small>}</span></div>)}{we.notes&&<div className="history-empty">{we.notes}</div>}</div>})}
  </div>
 }
 function SummaryScreen({data}:{data:AppData}){
  const [exercise,setExercise]=useState('all'); const [from,setFrom]=useState(''); const [to,setTo]=useState('');
  const active=data.exercises.filter(e=>e.isActive).sort((a,b)=>a.name.localeCompare(b.name,'ru'));
  const completed=data.workouts.filter(w=>w.status==='completed'&&(!from||w.date>=from)&&(!to||w.date<=to));
- const stats=active.map(ex=>{const points=completed.flatMap(w=>w.exercises.filter(we=>we.exerciseId===ex.id&&!we.skipped&&we.sets.length).flatMap(we=>we.sets.map(s=>({date:w.date,weight:s.weight,reps:s.reps,bodyweight:(s.loadType ?? we.loadType ?? ex.loadType)==='bodyweight'}))));const weighted=points.filter(p=>!p.bodyweight&&p.weight!=null&&p.reps!=null);const best=weighted.reduce((a,p)=>!a||Number(p.weight)>Number(a.weight)||(Number(p.weight)===Number(a.weight)&&Number(p.reps)>Number(a.reps))?p:a,null as typeof weighted[number]|null);return {ex,points,best};});
+ const stats=active.map(ex=>{const points=completed.flatMap(w=>w.exercises.filter(we=>we.exerciseId===ex.id&&!we.skipped&&we.sets.length).flatMap(we=>we.sets.map(s=>({date:w.date,weight:s.weight,reps:s.reps,bodyweight:(s.loadType ?? we.loadType ?? ex?.loadType)==='bodyweight'}))));const weighted=points.filter(p=>!p.bodyweight&&p.weight!=null&&p.reps!=null);const best=weighted.reduce((a,p)=>!a||Number(p.weight)>Number(a.weight)||(Number(p.weight)===Number(a.weight)&&Number(p.reps)>Number(a.reps))?p:a,null as typeof weighted[number]|null);return {ex,points,best};});
  const selected=exercise==='all'?null:stats.find(x=>x.ex.id===exercise);
  const exportData={...data,workouts:completed};
  const exportXlsx=async()=>{try{const rows=buildExportRows(exportData);const ws=XLSX.utils.aoa_to_sheet(rows);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Тренировки');const bytes=XLSX.write(wb,{bookType:'xlsx',type:'array'});await shareOrDownloadFile(new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),'gym-log-'+(from||'all')+'-'+(to||todayISO())+'.xlsx');}catch(e){console.error(e);}};
@@ -492,14 +501,14 @@ function DateRangePicker({from,to,onChange}:{from:string;to:string;onChange:(fro
 async function exportWorkoutsPdf(data:AppData,from:string,to:string){
  const workouts=data.workouts.filter(w=>w.status==='completed'&&(!from||w.date>=from)&&(!to||w.date<=to)).sort((a,b)=>a.date.localeCompare(b.date));
  const W=1240,H=1754,M=78;
- const pages:string[][]=[]; let lines:string[]=[];
+ const pages:string[][]=[]; const lines:string[]=[];
  const add=(s:string='')=>{lines.push(s)};
  add('GYM TRACKER'); add('ТРЕНИРОВКИ'); add(from||to?`Период: ${from?formatDate(from):'все'} — ${to?formatDate(to):'сегодня'}`:'Весь период'); add('');
  workouts.forEach(w=>{
    add(`${formatDate(w.date)} · ${w.name||workoutTypeName(data,w.typeId)}`);
    w.exercises.filter(we=>!we.skipped&&we.sets.length).forEach(we=>{
      const ex=data.exercises.find(e=>e.id===we.exerciseId);
-     add(`  ${ex?.name||'Упражнение'}`);
+     add(`  ${exerciseName(data,we)}`);
      we.sets.forEach((s,i)=>{
        const body=(s.loadType??we.loadType??ex?.loadType)==='bodyweight';
        add(`    ${i+1}. ${body?'Без веса':(s.weight!=null?`${formatWeight(s.weight)} кг`:'—')} × ${s.reps!=null?formatReps(s.reps):'—'}`);
@@ -568,62 +577,66 @@ function ProgressExerciseCard({stat}:{stat:{ex:Exercise;points:Array<{date:strin
  const recent=stat.points.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,4); const weighted=stat.points.filter(p=>p.weight!=null).slice().sort((a,b)=>a.date.localeCompare(b.date)); const min=weighted.length?Math.min(...weighted.map(p=>Number(p.weight))):0; const max=weighted.length?Math.max(...weighted.map(p=>Number(p.weight))):0;
  return <div className="card progress-card"><div className="progress-card-head"><div><div className="exercise-name">{stat.ex.name}</div><div className="muted">{stat.points.length} подходов</div></div>{stat.best&&<div className="record-badge"><span>ЛУЧШИЙ</span><strong>{formatWeight(stat.best.weight)} кг × {formatReps(stat.best.reps)}</strong></div>}</div><div className="mini-chart">{weighted.slice(-12).map((p,i)=><div className="chart-col" key={i}><div className="chart-bar" style={{height:`${max===min?48:18+((Number(p.weight)-min)/(max-min))*62}px`}}/><span>{formatWeight(p.weight)}</span></div>)}</div><div className="recent-results">{recent.map((p,i)=><div className="summary-row" key={i}><span>{formatDate(p.date)}</span><span className="summary-result">{p.bodyweight?'Собственный вес × '+formatReps(p.reps):formatWeight(p.weight)+' кг × '+formatReps(p.reps)}</span></div>)}</div></div>;
 }
-function SettingsScreen({data,onChange}:{data:AppData;onChange:(d:AppData)=>Promise<void>|void}){
+function SettingsScreen({data,onChange}:{data:AppData;onChange:(d:AppData)=>Promise<boolean>}){
  const [addName,setAddName]=useState('');
  const [newTemplateName,setNewTemplateName]=useState('');
  const [target,setTarget]=useState<WorkoutTypeId>(data.workoutTypes[0]?.id ?? '');
  const [draggingId,setDraggingId]=useState<string|null>(null);
  const [dirty,setDirty]=useState(false);
  const [savedFlash,setSavedFlash]=useState(false);
+ const [saving,setSaving]=useState(false);
+ const savingRef=useRef(false);
  const dragId=useRef<string|null>(null);
  const settings=data.settings ?? {restTimerSeconds:120,restTimerEnabled:true,theme:'dark' as const,accentColor:'red' as const};
  const activeFor=(typeId:WorkoutTypeId)=>data.exercises.filter(e=>e.workoutTypeId===typeId&&e.isActive).sort((a,b)=>a.sortOrder-b.sortOrder);
  const [draftExercises,setDraftExercises]=useState<Exercise[]>(()=>activeFor(target).map(e=>({...e})));
 
+ useEffect(()=>{if(!dirty&&!data.workoutTypes.some(t=>t.id===target))setTarget(data.workoutTypes[0]?.id??'');},[data.workoutTypes,target,dirty]);
  useEffect(()=>{
    if(!dirty) setDraftExercises(activeFor(target).map(e=>({...e})));
  },[data.exercises,target,dirty]);
 
  const updateSettings=(patch:Partial<typeof settings>)=>onChange({...data,settings:{...settings,...patch}});
+ const saveTemplate=async():Promise<boolean>=>{
+   if(savingRef.current)return false;
+   savingRef.current=true;setSaving(true);
+   try {
+     const next=saveTemplateExercises(data,target,draftExercises);
+     if(!await onChange(next))return false;
+     setDraftExercises(next.exercises.filter(e=>e.workoutTypeId===target&&e.isActive).sort((a,b)=>a.sortOrder-b.sortOrder));
+     setDirty(false);setSavedFlash(true);
+     window.setTimeout(()=>setSavedFlash(false),1400);
+     return true;
+   } finally {savingRef.current=false;setSaving(false);}
+ };
  const createTemplate=async()=>{
+   if(savingRef.current)return;
+   if(dirty){await saveTemplate();return;}
    const name=newTemplateName.trim();
    if(!name||data.workoutTypes.some(t=>t.name.trim().toLowerCase()===name.toLowerCase()))return;
-   const id='custom-'+uid();
-   const next={...data,workoutTypes:[...data.workoutTypes,{id,name,slug:name.toLowerCase().replace(/[^a-zа-я0-9]+/gi,'-').replace(/^-|-$/g,'')}]};
-   await onChange(next);setTarget(id);setDraftExercises([]);setDirty(false);setNewTemplateName('');
+   savingRef.current=true;setSaving(true);
+   try{
+     const id='custom-'+uid();
+     if(!await onChange({...data,workoutTypes:[...data.workoutTypes,{id,name,slug:name.toLowerCase().replace(/[^a-zа-я0-9]+/gi,'-').replace(/^-|-$/g,'')}]}))return;
+     setTarget(id);setDraftExercises([]);setDirty(false);setNewTemplateName('');
+   }finally{savingRef.current=false;setSaving(false);}
  };
  const deleteTemplate=async(id:WorkoutTypeId)=>{
+   if(savingRef.current)return;
+   if(dirty){await saveTemplate();return;}
    const type=data.workoutTypes.find(t=>t.id===id);if(!type)return;
    if(!window.confirm('Удалить шаблон «'+type.name+'»? Уже сохранённые тренировки останутся в истории.'))return;
-   const usedIds=new Set(data.workouts.flatMap(w=>w.exercises.map(we=>we.exerciseId)));
-   const nextTypes=data.workoutTypes.filter(t=>t.id!==id);
-   const nextExercises=data.exercises.filter(e=>e.workoutTypeId!==id||usedIds.has(e.id));
-   await onChange({...data,workoutTypes:nextTypes,exercises:nextExercises});
-   const nextTarget=nextTypes[0]?.id??'';
-   setTarget(nextTarget);setDraftExercises(nextExercises.filter(e=>e.workoutTypeId===nextTarget&&e.isActive).sort((a,b)=>a.sortOrder-b.sortOrder));setDirty(false);
+   savingRef.current=true;setSaving(true);
+   try{
+     const next=removeTemplate(data,id);
+     if(!await onChange(next))return;
+     const nextTarget=next.workoutTypes[0]?.id??'';
+     setTarget(nextTarget);setDraftExercises(next.exercises.filter(e=>e.workoutTypeId===nextTarget&&e.isActive).sort((a,b)=>a.sortOrder-b.sortOrder));setDirty(false);
+   }finally{savingRef.current=false;setSaving(false);}
  };
-
- const saveTemplate=async()=>{
-   const existingById=new Map(data.exercises.map(e=>[e.id,e]));
-   const updated=data.exercises.map(e=>{
-     if(e.workoutTypeId!==target)return e;
-     const draft=draftExercises.find(x=>x.id===e.id);
-     return draft?{...draft,sortOrder:draftExercises.findIndex(x=>x.id===draft.id)+1,isActive:true}:{...e,isActive:false};
-   });
-   const newExercises=draftExercises
-     .filter(e=>!existingById.has(e.id))
-     .map((e,i)=>({...e,sortOrder:i+1,isActive:true}));
-   const next={...data,exercises:[...updated,...newExercises]};
-   await onChange(next);
-   setDraftExercises(draftExercises.map((e,i)=>({...e,sortOrder:i+1,isActive:true})));
-   setDirty(false);
-   setSavedFlash(true);
-   window.setTimeout(()=>setSavedFlash(false),1400);
- };
-
- const switchTemplate=(nextTarget:WorkoutTypeId)=>{
-   if(nextTarget===target)return;
-   if(dirty)void saveTemplate();
+ const switchTemplate=async(nextTarget:WorkoutTypeId)=>{
+   if(nextTarget===target||savingRef.current)return;
+   if(dirty&&!await saveTemplate())return;
    setTarget(nextTarget);
    setDraftExercises(activeFor(nextTarget).map(e=>({...e})));
    setDirty(false);
@@ -704,7 +717,7 @@ function SettingsScreen({data,onChange}:{data:AppData;onChange:(d:AppData)=>Prom
 
  const accentOptions=[['red','Красный','#ff375f'],['pink','Розовый','#ff2d55'],['purple','Фиолетовый','#af52de'],['blue','Синий','#0a84ff'],['teal','Бирюзовый','#14b8a6'],['green','Зелёный','#30d158'],['orange','Оранжевый','#ff9f0a']] as const;
 
- if(!target)return <div className="screen"><Top title="Настройки" sub="Приложение и шаблоны"/><div className="card muted">Нет доступных шаблонов.</div></div>;
+
 
  return <div className="screen"><Top title="Настройки" sub="Приложение и шаблоны"/>
   <div className="card settings-group"><div className="settings-section-title">ОФОРМЛЕНИЕ</div>
@@ -716,32 +729,29 @@ function SettingsScreen({data,onChange}:{data:AppData;onChange:(d:AppData)=>Prom
    {settings.restTimerEnabled&&<div className="settings-item timer-setting"><div><strong>Длительность</strong><div className="muted">Шаг 30 секунд</div></div><select className="input timer-select" value={settings.restTimerSeconds} onChange={e=>updateSettings({restTimerSeconds:Number(e.target.value)})}>{Array.from({length:20},(_,i)=>(i+1)*30).map(s=><option key={s} value={s}>{Math.floor(s/60)}:{String(s%60).padStart(2,'0')}</option>)}</select></div>}
   </div>
   <div className="card">
-   <div className="settings-section-title">УПРАЖНЕНИЯ</div>
-   <div className="segmented">{data.workoutTypes.map(t=><button key={t.id} className={target===t.id?'active':''} onClick={()=>switchTemplate(t.id)}>{t.name}</button>)}</div>
-   <div className="settings-add-exercise"><div className="exercise-name">Шаблоны</div><div className="form-grid" style={{marginTop:10}}><input className="input" value={newTemplateName} onChange={e=>setNewTemplateName(e.target.value)} placeholder="Например, Верх тела"/><button className="secondary" disabled={!newTemplateName.trim()||data.workoutTypes.some(t=>t.name.trim().toLowerCase()===newTemplateName.trim().toLowerCase())} onClick={()=>void createTemplate()}>Добавить шаблон</button><button className="secondary template-delete-button" disabled={data.workoutTypes.length<=1} aria-label="Удалить шаблон" onClick={()=>void deleteTemplate(target)}>Удалить шаблон</button></div></div>
+   <div className="settings-section-title">УПРАЖНЕНИЯ</div>{!target&&<p className="muted">Нет доступных шаблонов. Создайте новый шаблон ниже.</p>}
+   <div className="segmented">{data.workoutTypes.map(t=><button key={t.id} className={target===t.id?'active':''} disabled={saving} onClick={()=>void switchTemplate(t.id)}>{t.name}</button>)}</div>
+   <div className="settings-add-exercise"><div className="exercise-name">Шаблоны</div><div className="form-grid" style={{marginTop:10}}><input className="input" value={newTemplateName} onChange={e=>setNewTemplateName(e.target.value)} placeholder="Например, Верх тела"/><button className="secondary" disabled={saving||dirty||!newTemplateName.trim()||data.workoutTypes.some(t=>t.name.trim().toLowerCase()===newTemplateName.trim().toLowerCase())} onClick={()=>void createTemplate()}>Добавить шаблон</button><button className="secondary template-delete-button" disabled={saving||dirty||!target} aria-label="Удалить шаблон" onClick={()=>void deleteTemplate(target)}>Удалить шаблон</button></div></div>
    <div className="settings-list">
-    {draftExercises.map(ex=><div className={'settings-item '+(draggingId===ex.id?'is-dragging':'')} data-id={ex.id} key={ex.id} onPointerDown={e=>startDrag(ex.id,e)} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}>
+    {draftExercises.map(ex=><div className={'settings-item '+(draggingId===ex.id?'is-dragging':'')} data-id={ex.id} key={ex.id} onPointerDown={e=>{if(!saving)startDrag(ex.id,e)}} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}>
       <span className="settings-drag-hint" aria-hidden="true">≡</span>
       <span className="settings-name">{ex.name}</span>
       <div className="load-type-segmented" onPointerDown={e=>e.stopPropagation()}>
-        <button type="button" className={ex.loadType!=='bodyweight'?'active':''} onClick={()=>setLoadType(ex.id,'weight')}>С весом</button>
-        <button type="button" className={ex.loadType==='bodyweight'?'active':''} onClick={()=>setLoadType(ex.id,'bodyweight')}>Без веса</button>
+        <button type="button" className={ex.loadType!=='bodyweight'?'active':''} disabled={saving} onClick={()=>setLoadType(ex.id,'weight')}>С весом</button>
+        <button type="button" className={ex.loadType==='bodyweight'?'active':''} disabled={saving} onClick={()=>setLoadType(ex.id,'bodyweight')}>Без веса</button>
       </div>
-      <button className="settings-delete" aria-label={'Удалить '+ex.name+' из шаблона'} onPointerDown={e=>e.stopPropagation()} onClick={()=>remove(ex.id)}>−</button>
+      <button className="settings-delete" aria-label={'Удалить '+ex.name+' из шаблона'} onPointerDown={e=>e.stopPropagation()} disabled={saving} onClick={()=>remove(ex.id)}>−</button>
     </div>)}
    </div>
    <div className="settings-tip">«Без веса» — в тренировке записываются только подходы и повторения. Режим можно изменить и внутри конкретной тренировки.</div>
-   <div className="settings-add-exercise"><div className="exercise-name">Добавить упражнение</div><div className="form-grid" style={{marginTop:10}}><input className="input" value={addName} onChange={e=>setAddName(e.target.value)} placeholder="Название упражнения"/><button className="secondary" onClick={add}>Добавить в шаблон</button></div><div className="muted" style={{fontSize:12,marginTop:8}}>Изменение попадёт в шаблон после нажатия «Сохранить».</div></div>
-   <div className="settings-save-row"><div>{savedFlash?<span className="settings-saved">Сохранено</span>:dirty?<span className="settings-unsaved">Есть несохранённые изменения</span>:<span className="settings-saved">Все изменения сохранены</span>}</div><button className="primary settings-save-button" disabled={!dirty} onClick={()=>void saveTemplate()}>Сохранить</button></div>
+   <div className="settings-add-exercise"><div className="exercise-name">Добавить упражнение</div><div className="form-grid" style={{marginTop:10}}><input className="input" disabled={saving||!target} value={addName} onChange={e=>setAddName(e.target.value)} placeholder="Название упражнения"/><button className="secondary" disabled={saving||!target} onClick={add}>Добавить в шаблон</button></div><div className="muted" style={{fontSize:12,marginTop:8}}>Изменение попадёт в шаблон после нажатия «Сохранить».</div></div>
+   <div className="settings-save-row"><div>{savedFlash?<span className="settings-saved">Сохранено</span>:dirty?<span className="settings-unsaved">Есть несохранённые изменения</span>:<span className="settings-saved">Все изменения сохранены</span>}</div><button className="primary settings-save-button" disabled={saving||!dirty} onClick={()=>void saveTemplate()}>Сохранить</button></div>
   </div>
  </div>
 }
 function WorkoutMetaEditor({data,workout,onClose,onSave}:{data:AppData;workout:Workout;onClose:()=>void;onSave:(w:Workout)=>void}){
  const [date,setDate]=useState(workout.date); const [name,setName]=useState(workout.name??''); const [type,setType]=useState(workout.typeId);
- return <div className="modal-backdrop" onClick={onClose}><div className="modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><h2>Данные тренировки</h2><button className="icon-btn" onClick={onClose}>×</button></div><div className="form-grid"><label className="field-label">Название<input className="input" value={name} onChange={e=>setName(e.target.value)} placeholder={workoutTypeName(data,type)}/></label><label className="field-label">Тип<select className="input" value={type} onChange={e=>setType(e.target.value as WorkoutTypeId)}>{data.workoutTypes.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label><label className="field-label">Дата<input className="input" type="date" value={date} onChange={e=>setDate(e.target.value)}/></label><button className="primary" onClick={()=>onSave({...workout,name:name.trim()||undefined,typeId:type,date})}>Сохранить</button></div></div></div>
+ return <div className="modal-backdrop" onClick={onClose}><div className="modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><h2>Данные тренировки</h2><button className="icon-btn" onClick={onClose}>×</button></div><div className="form-grid"><label className="field-label">Название<input className="input" value={name} onChange={e=>setName(e.target.value)} placeholder={workoutTypeName(data,type)}/></label><label className="field-label">Тип<select className="input" value={type} onChange={e=>setType(e.target.value as WorkoutTypeId)}>{data.workoutTypes.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label><label className="field-label">Дата<input className="input" type="date" value={date} onChange={e=>setDate(e.target.value)}/></label><button className="primary" disabled={!isDate(date)||!type} onClick={()=>onSave({...workout,name:name.trim()||undefined,typeId:type,date})}>Сохранить</button></div></div></div>
 }
 
 function NotFound(){return <div className="card">Не найдено.</div>}
-
-
-createRoot(document.getElementById('root')!).render(<App/>);

@@ -1,114 +1,127 @@
 import type { AppData } from './types';
-import { loadData, saveData } from './storage';
+import { acknowledge, loadCachedData, loadData, loadPending, saveData, stagePending, userStorageKey } from './storage';
+import { isValidAppData } from './domain';
 import { getTelegram } from './telegram';
 
-// Public Supabase Edge Function URL. This is not a secret and is intentionally
-// part of the client bundle, so Vercel does not need a public VITE_* env var.
-const API_URL = 'https://jyywrpxetdfzjdqhebpj.supabase.co/functions/v1/api';
+const API_URL = import.meta.env.VITE_API_URL || 'https://jyywrpxetdfzjdqhebpj.supabase.co/functions/v1/api';
+export type SyncState = 'local' | 'synced' | 'pending' | 'offline' | 'conflict';
+let state: SyncState = 'local';
+let version: string | null = null;
+let key = '';
+let initData = '';
+let verifiedSession = false;
+let observedPending: string | null = null;
+export const getSyncState = () => state;
 
-function hasTelegramSession() {
-  return Boolean(API_URL && getTelegram()?.initData);
+function checkSession() {
+  if (key !== userStorageKey() || initData !== (getTelegram()?.initData ?? '')) {
+    throw new Error('Аккаунт изменился. Перезапустите приложение перед сохранением.');
+  }
 }
 
-export const isRemoteConfigured = hasTelegramSession();
+async function request(options: RequestInit = {}) {
+  checkSession();
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 8000);
+  try {
+    const response = await fetch(API_URL, { ...options, headers: { Authorization: `tma ${initData}`, ...options.headers }, signal: controller.signal });
+    const body = await response.text(); // Keep the timeout active while the response body arrives.
+    return new Response(body, { status: response.status, headers: response.headers });
+  } finally { window.clearTimeout(timeout); }
+}
 
-function headers() {
-  const tg = getTelegram();
-  return { Authorization: `tma ${tg?.initData ?? ''}` };
+function responseVersion(response: Response): string {
+  const expectedUser = getTelegram()?.initDataUnsafe?.user?.id;
+  if (!expectedUser || response.headers.get('X-Telegram-User-Id') !== String(expectedUser)) {
+    throw new Error('Не удалось подтвердить владельца данных. Сохранение заблокировано.');
+  }
+  const value = response.headers.get('ETag');
+  if (!value) throw new Error('Сервер не поддерживает безопасное сохранение. Требуется обновление API.');
+  return value;
 }
 
 export async function getAppData(): Promise<AppData> {
-  // Outside Telegram (local development / browser preview), use local storage.
-  // The Supabase endpoint requires signed Telegram initData and must not block
-  // the app when that data is unavailable.
-  if (!hasTelegramSession()) return loadData();
-
+  key = userStorageKey();
+  initData = getTelegram()?.initData ?? '';
+  version = null;
+  verifiedSession = false;
+  if (!initData) { state = 'local'; return loadData(); }
+  observedPending = localStorage.getItem(`${key}:pending`);
+  const pending = loadPending(key);
   try {
-    // Do not let a stalled network request leave the Mini App on the splash screen forever.
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 8000);
-    try {
-      const res = await fetch(`${API_URL}`, { headers: headers(), signal: controller.signal });
-      if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
-      const data = await res.json() as AppData;
-      data.workoutTypes = data.workoutTypes.map(t => t.id==='arms' ? {...t,name:'Руки и грудь'} : t.id==='back_shoulders' ? {...t,name:'Спина и плечи'} : t);
-      saveData(data);
-      return data;
-    } finally {
-      window.clearTimeout(timeout);
+    const response = await request();
+    if (!response.ok) throw new Error(`Не удалось загрузить журнал (${response.status}).`);
+    const remoteVersion = responseVersion(response);
+    const data: unknown = await response.json();
+    if (!isValidAppData(data)) throw new Error('Сервер вернул некорректные данные.');
+    checkSession();
+    verifiedSession = true;
+    if (pending) {
+      // Never replace unsynced changes with a remote snapshot or silently rebase them.
+      version = pending.baseVersion;
+      state = version === remoteVersion ? 'pending' : 'conflict';
+      return pending.data;
     }
+    version = remoteVersion;
+    saveData(data, key);
+    state = 'synced';
+    return data;
   } catch (error) {
-    console.warn('Remote data unavailable, using local cache:', error);
-    return loadData();
+    state = 'offline';
+    version = pending?.baseVersion ?? null;
+    const cached = pending?.data ?? loadCachedData(key);
+    if (cached) return cached;
+    throw error;
+  }
+}
+
+export function stageData(data: AppData): void {
+  checkSession();
+  if (!isValidAppData(data)) throw new Error('Изменение содержит некорректные данные.');
+  if (!initData) { saveData(data, key); return; }
+  if(localStorage.getItem(`${key}:pending`)!==observedPending){
+    state='conflict';
+    throw new Error('Локальная копия изменена в другой вкладке. Перезапустите приложение; данные не перезаписаны.');
+  }
+  stagePending(data, version, key);
+  observedPending=localStorage.getItem(`${key}:pending`);
+  if (state !== 'conflict') state = 'pending';
+}
+
+export async function saveRemoteData(data: AppData): Promise<AppData> {
+  checkSession();
+  if (!initData) return data;
+  if (!verifiedSession || state === 'conflict' || !version) {
+    throw new Error('Синхронизация заблокирована: версия сервера неизвестна или изменилась. Локальная копия сохранена.');
+  }
+  try {
+    const response = await request({ method: 'PUT', headers: { 'Content-Type': 'application/json', 'If-Match': version }, body: JSON.stringify(data) });
+    if (response.status === 409 || response.status === 412) {
+      state = 'conflict';
+      throw new Error('Журнал изменён на другом устройстве. Локальная копия сохранена; автоматическая перезапись запрещена.');
+    }
+    if (!response.ok) throw new Error(`Сохранение не подтверждено сервером (${response.status}). Локальная копия сохранена.`);
+    const nextVersion = responseVersion(response);
+    const result: unknown = await response.json();
+    if (!isValidAppData(result)) throw new Error('Сервер не подтвердил корректные данные.');
+    checkSession();
+    version = nextVersion;
+    if(localStorage.getItem(`${key}:pending`)!==observedPending){
+      state='conflict';
+      throw new Error('Сервер принял запись, но локальная копия изменилась в другой вкладке. Обе версии сохранены.');
+    }
+    acknowledge(data, version, key);
+    observedPending=localStorage.getItem(`${key}:pending`);
+    state = loadPending(key) ? 'pending' : 'synced';
+    return result;
+  } catch (error) {
+    if (state !== 'conflict') state = 'offline';
+    throw error;
   }
 }
 
 export async function notifyTimerExpired(): Promise<void> {
-  if (!hasTelegramSession()) return;
-  const res = await fetch(API_URL, {
-    method: 'POST',
-    headers: { ...headers(), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'timer_expired' }),
-  });
-  if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
-}
-
-export async function deleteRemoteWorkout(workoutId: string): Promise<void> {
-  if (!hasTelegramSession()) return;
-  const res = await fetch(API_URL, {
-    method: 'POST',
-    headers: { ...headers(), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'delete_workout', workoutId }),
-  });
-  if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
-}
-
-export async function ensureMenuButton(): Promise<void> {
-  if (!hasTelegramSession()) return;
-  const res = await fetch(API_URL, {
-    method: 'POST',
-    headers: { ...headers(), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'ensure_menu_button', url: window.location.origin }),
-  });
-  if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
-}
-
-export async function saveRemoteData(data: AppData): Promise<AppData> {
-  // A workout marked completed without any recorded sets is an accidental empty record,
-  // not a real workout. Remove such records before every sync so stale clients cannot
-  // re-upload them after a server-side cleanup.
-  const cleaned: AppData = {
-    ...data,
-    workouts: data.workouts.filter(w =>
-      w.status !== 'completed' ||
-      w.exercises.some(ex => ex.sets.length > 0)
-    ),
-  };
-  // Always persist locally first. Remote sync must never be allowed to lose a workout.
-  saveData(cleaned);
-  if (!hasTelegramSession()) return cleaned;
-
-  let lastError: unknown = null;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      const res = await fetch(`${API_URL}`, {
-        method: 'PUT',
-        headers: { ...headers(), 'Content-Type': 'application/json' },
-        body: JSON.stringify(cleaned),
-      });
-      if (res.ok) return await res.json() as AppData;
-
-      const message = await res.text();
-      // Retry transient server/rate-limit failures; authentication/validation
-      // errors should surface immediately instead of hammering the API.
-      if (res.status !== 429 && res.status < 500) {
-        throw new Error(`API ${res.status}: ${message}`);
-      }
-      throw new Error(`API ${res.status}: ${message}`);
-    } catch (error) {
-      lastError = error;
-      if (attempt < 2) await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));
-    }
-  }
-  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+  if (!initData) return;
+  const response = await request({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'timer_expired' }) });
+  if (!response.ok) throw new Error('Уведомление таймера не отправлено.');
 }
